@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 3.3 $
-# @(#) $Id: savelog.pl,v 3.3 2002/10/02 07:28:16 chongo Exp chongo $
+# @(#) $Revision: 3.4 $
+# @(#) $Id: savelog.pl,v 3.4 2002/10/02 09:33:48 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
@@ -2162,7 +2162,7 @@ sub archive($$$)
 		    if $verbose;
 	    if (system("$indx_prog", "$old_file",
 	    	       "$old_file.indx") != 0) {
-		warm_msg(58, "$indx_prog $old_file " .
+		warn_msg(58, "$indx_prog $old_file " .
 			     "$old_file.indx failed");
 	    }
 	    if (-f "$old_file.indx") {
