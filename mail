@@ -1,0 +1,138 @@
+#!/usr/bin/perl -wT
+#
+# mail - mail indexing routine for savelog
+#
+# usage:
+#	mail file indx
+#
+#	file	the filename to index
+#	indx	the index name
+
+# usage
+#
+use strict;
+
+# my vars
+#
+my $file;		# input filename
+my $indx_file;		# filename of the index file
+my $gunzip;		# gunzip binary
+#
+my $line;		# current line
+my $prev;		# previous line or undef
+#
+my $line_len;		# length of the current line
+my $subject;		# previous subject line found
+my $offset;		# current file octet offset
+my $start;		# start of element
+my $seg_len;		# segment length
+my $end_hdr;		# 1 => end of header found
+
+# parse args
+#
+if (!defined $ARGV[0] && !defined $ARGV[1]) {
+    print STDERR "usage: $0 file indx\n";
+    exit 1;
+}
+$file = $ARGV[0];
+$indx_file = $ARGV[1];
+
+# determine the name of the index file
+#
+if ($file =~ /\.gz$/) {
+    if (-x "/bin/gunzip") {
+	$gunzip = "/bin/gunzip";
+    } elsif (-x "/usr/bin/gunzip") {
+	$gunzip = "/usr/bin/gunzip";
+    } elsif (-x "/usr/local/bin/gunzip") {
+	$gunzip = "/usr/local/bin/gunzip";
+    } elsif (-x "/usr/gnu/bin/gunzip") {
+	$gunzip = "/usr/gnu/bin/gunzip";
+    } elsif (-x "/usr/freeware/bin/gunzip") {
+	$gunzip = "/usr/freeware/bin/gunzip";
+    } else {
+	$gunzip = "gunzip";
+    }
+}
+
+# open the filename or gunzip it
+#
+if ($file =~ /\.gz$/) {
+    open(FILE, "$gunzip -c -f -q $file|") || die "cannot gunzip $file\n";
+} else {
+    open(FILE, "<$file") || die "cannot open file: $file\n";
+}
+
+# open the index file
+#
+if ($indx_file =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    $indx_file = $1;
+} else {
+    die "file: $file and index file: $indx_file has bad chars\n";
+}
+open(INDX, ">$indx_file") || die "cannot open index file: $indx_file\n";
+
+# scan the entire file
+#
+$prev = undef;
+$subject = undef;
+$offset = 0;
+$start = 0;
+$seg_len = 0;
+$end_hdr = 0;
+while (defined($line = <FILE>)) {
+
+    # detect the start of a new message
+    #
+    if (defined $prev && $prev eq "\n" && $line =~ /^From /) {
+
+	# new segment - print the previous segment info
+	#
+	if (defined $subject) {
+	    print INDX "$start\t$seg_len\t$subject\n" ||
+	    	die "write error #1: $indx_file: $!\n";
+	} else {
+	    print INDX "$start\t$seg_len\t\n" ||
+	    	die "write error #2: $indx_file: $!\n";
+	}
+
+	# prep for the new segment
+	#
+	$subject = "";
+	$start = $offset;
+	$seg_len = 0;
+	$end_hdr = 0;
+    }
+
+    # watch for the end of the header
+    #
+    if (!$end_hdr && $line eq "\n") {
+	$end_hdr = 1;
+    }
+
+    # watch for the Subject line
+    #
+    if (!$end_hdr && $line =~ m#^Subject:\s+(.*)$#) {
+	$subject = $1;
+    }
+
+    # count the line length - prep the previous line
+    #
+    $line_len = length($line);
+    $seg_len += $line_len;
+    $offset += $line_len;
+    $prev = $line;
+}
+
+# deal with the last segment
+#
+if (defined $subject) {
+    print INDX "$start\t$seg_len\t$subject\n" ||
+	die "write error #3: $indx_file: $!\n";
+}
+
+# all done
+#
+close INDX;
+close FILE;
+exit(0);
