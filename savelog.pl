@@ -1,9 +1,9 @@
-#!/usr/bin/perl -wT
+#!/usr/bin/perl -w
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.5 $
-# @(#) $Id: savelog.pl,v 1.5 2000/01/22 10:51:48 chongo Exp chongo $
+# @(#) $Revision: 1.6 $
+# @(#) $Id: savelog.pl,v 1.6 2000/01/22 11:04:53 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -441,6 +441,8 @@ $ENV{SHELL} = "/bin/sh";
 delete $ENV{ENV};
 use Cwd;
 use File::Basename;
+use IO::File;
+require 'syscall.ph';
 
 # my vars
 #
@@ -458,6 +460,9 @@ my $archive_dir;	# where the archive symlink should point
 #
 my $exit_val;		# how we will exit
 my $cwd;		# initial current working directory
+#
+my $true = 1;		# truth as we know it
+my $false = 0;		# genuine falseness
 
 # setup
 #
@@ -508,11 +513,18 @@ MAIN:
 	# prepare to process the file
 	#
 	print "\n" if $verbose;
-	next unless &prepfile($filename, \$dir, \$file, \$gz_dir);
+	if (! &prepfile($filename, \$dir, \$file, \$gz_dir)) {
+	    print STDERR "error while preparing for $filename, skipping\n";
+	    next;
+	}
 
 	# archive the file
 	#
-	&archive($filename, $dir, $file, $gz_dir);
+	if (! &archive($filename, $dir, $file, $gz_dir)) {
+	    print STDERR "error while processing $filename\n";
+	    next;
+	}
+	print "DEBUG: finished with $filename\n" if $verbose;
     }
 
     # all done
@@ -659,28 +671,36 @@ sub parse()
     # -o owner
     #
     if (defined($opt_o)) {
-	$file_uid = getpwnam($opt_o) if defined $opt_o;
-	if (!defined($file_uid)) {
-	    &error(4, "no such user: $opt_o");
+	if ($EFFECTIVE_USER_ID == 0) {
+	    $file_uid = getpwnam($opt_o) if defined $opt_o;
+	    if (!defined($file_uid)) {
+		&error(4, "no such user: $opt_o");
+	    }
+	    print "DEBUG: set file uid: $file_uid\n" if $verbose;
+        } else {
+	    &error(5, "only the superuser can use -o");
 	}
-	print "DEBUG: set file uid: $file_uid\n" if $verbose;
     }
 
     # -g group
     #
     if (defined($opt_g)) {
-	$file_gid = getgrnam($opt_g) if defined $opt_g;
-	if (!defined($file_gid)) {
-	    &error(5, "no such group: $opt_g");
+	if ($EFFECTIVE_USER_ID == 0) {
+	    $file_gid = getgrnam($opt_g) if defined $opt_g;
+	    if (!defined($file_gid)) {
+		&error(6, "no such group: $opt_g");
+	    }
+	    print "DEBUG: set file uid: $file_gid\n" if $verbose;
+        } else {
+	    &error(7, "only the superuser can use -g");
 	}
-	print "DEBUG: set file uid: $file_gid\n" if $verbose;
     }
 
     # -c cycle
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	&error(6, "cycles to keep: $cycle must be >= 0");
+	&error(8, "cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -688,10 +708,10 @@ sub parse()
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    &error(7, "index type may not contain /, ~, *, ?, or [");
+	    &error(9, "index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    &error(8, "index type type may not be . or ..");
+	    &error(10, "index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -700,17 +720,17 @@ sub parse()
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    &error(9, "use of -I typedir requires -i indx_type");
+	    &error(11, "use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    &error(10, "no such index type directory: $opt_I");
+	    &error(12, "no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    &error(11, "index type prog: $indx_type not found in: $indx_dir");
+	    &error(13, "index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
 	print "DEBUG: indexing prog: $indx_prog\n" if $verbose;
@@ -720,10 +740,10 @@ sub parse()
     #
     $oldname = $opt_a if defined $opt_a;
     if ($oldname =~ m:[/~*?[]:) {
-	&error(12, "OLD dir name may not contain /, ~, *, ?, or [");
+	&error(14, "OLD dir name may not contain /, ~, *, ?, or [");
     }
     if ($oldname eq "." || $oldname eq "..") {
-	&error(13, "OLD dir name may not be . or ..");
+	&error(15, "OLD dir name may not be . or ..");
     }
     if ($oldname ne "OLD" && $verbose) {
 	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
@@ -731,8 +751,10 @@ sub parse()
 
     # -A archive_dir
     #
-    $archive_dir = $opt_A;
-    print "DEBUG: archive directory: $archive_dir\n" if $verbose;
+    if (defined $opt_A) {
+	$archive_dir = $opt_A;
+	print "DEBUG: archive directory: $archive_dir\n" if $verbose;
+    }
 
     # must have at least one arg
     #
@@ -771,9 +793,8 @@ sub prepfile($\$\$\$)
     if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
     	$filename = $1;
     } else {
-	&warning(15, "filename has dangerious chars: %s, skipping %s",
-		 $filename, $filename);
-	return 0;
+	&warning(16, "filename has dangerious chars: $filename");
+	return $false;
     }
     print "DEBUG: starting to process: $filename\n" if $verbose;
 
@@ -790,13 +811,12 @@ sub prepfile($\$\$\$)
     if ($dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
     	$dir = $1;
     } else {
-	&warning(16, "file directory has dangerious chars: %s, skipping %s",
-		 $dir, $filename);
-	return 0;
+	&warning(17, "file directory has dangerious chars: $dir");
+	return $false;
     }
     if (! chdir($dir)) {
-    	&warning(17, "cannot cd to $dir, skipping $filename");
-	return 0;
+    	&warning(18, "cannot cd to $dir");
+	return $false;
     }
     print "DEBUG: working directory: $dir\n" if $verbose;
 
@@ -804,8 +824,8 @@ sub prepfile($\$\$\$)
     #
     if (! -d $oldname) {
 	if (! mkdir($oldname, $archdir_mode)) {
-	    &warning(18, "cannot mkdir: $dir/$oldname, skipping $filename");
-	    return 0;
+	    &warning(19, "cannot mkdir: $dir/$oldname");
+	    return $false;
 	} else {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
 	}
@@ -821,13 +841,13 @@ sub prepfile($\$\$\$)
 	if ($archive_dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	    $archive_dir = $1;
 	} else {
-	    &error(19, "archive dir has dangerious chars: $archive_dir");
+	    &error(20, "archive dir has dangerious chars: $archive_dir");
 	}
 
 	# The archive directory must exist
 	#
 	if (! -d $archive_dir) {
-	    &error(20, "archive dir: $archive_dir is not a directory");
+	    &error(21, "archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
 	#
@@ -838,7 +858,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(21, "cannot stat archive dir: $archive_dir");
+	    	&error(22, "cannot stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -848,9 +868,9 @@ sub prepfile($\$\$\$)
 		#
 		if (!unlink("$oldname/archive") ||
 		    !symlink($archive_dir, "$oldname/archive")) {
-		    &warning(22, "cannot symlink %s to %s, skipping %s",
-		    	     "$oldname/archive", $archive_dir, $filename);
-		    return 0;
+		    &warning(23,
+			     "cannot symlink $oldname/archive to $archive_dir");
+		    return $false;
 		}
 		printf("DEBUG: symlink %s to %s\n", 
 		       "$oldname/archive", $archive_dir) if $verbose;
@@ -863,13 +883,13 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(23, "can't stat archive dir: $archive_dir");
+	    	&error(24, "can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	&warning(24, "%s is a directory and is not %s, skipping %s",
-			     "$oldname/archive", $archive_dir, $filename);
-	    	return 0;
+	    	&warning(25,
+		    "$oldname/archive is a directory and is not $archive_dir");
+	    	return $false;
 	    }
 
 	# No OLD/archive exists, so make is a symlink to archive_dir
@@ -879,9 +899,8 @@ sub prepfile($\$\$\$)
 	    # make OLD/archive a symlink to the archive_dir
 	    #
 	    if (!symlink($archive_dir, "$oldname/archive")) {
-		&warning(25, "can't symlink %s to %s, skipping %s",
-			 "$oldname/archive", $archive_dir, $filename);
-		return 0;
+		&warning(26, "cannot symlink $oldname/archive to $archive_dir");
+		return $false;
 	    }
 	    printf("DEBUG: symlinked %s to %s\n", 
 		   "$oldname/archive", $archive_dir) if $verbose;
@@ -914,15 +933,14 @@ sub prepfile($\$\$\$)
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
-	    &warning(26, "unable to chmod 0%03o OLD directory: %s, skipping %s",
-			 $archdir_mode, "$dir/$oldname", $filename);
-	    return 0;
+	    &warning(27, "unable to chmod 0%03o OLD directory: %s",
+			 $archdir_mode, "$dir/$oldname");
+	    return $false;
 	}
     }
     if (! -w $oldname) {
-	&warning(27, "OLD directory: %s is not writable, skipping %s",
-		     "$dir/$oldname", $filename);
-    	return 0;
+	&warning(28, "OLD directory: $dir/$oldname is not writable");
+    	return $false;
     }
     #
     if ($gz_dir ne $oldname) {
@@ -933,16 +951,15 @@ sub prepfile($\$\$\$)
 		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
-		&warning(28,
-		    "unable to chmod 0%03o archive directory: %s, skipping %s",
-		    $archdir_mode, $gz_dir, $filename);
-		return 0;
+		&warning(29,
+		    "unable to chmod 0%03o archive directory: %s",
+		    $archdir_mode, $gz_dir);
+		return $false;
 	    }
 	}
 	if (! -w $gz_dir) {
-	    &warning(29, "archive directory: %s is not writable, skipping %s",
-			 $gz_dir, $filename);
-	    return 0;
+	    &warning(30, "archive directory: $gz_dir is not writable");
+	    return $false;
 	}
     }
 
@@ -956,7 +973,121 @@ sub prepfile($\$\$\$)
     $$dir_p = $dir;
     $$file_p = $file;
     $$gz_dir_p = $gz_dir;
-    return 1;
+    return $true;
+}
+
+
+# safe_file_create - safely create a file with the proper perm, uid and gid
+#
+# usage:
+#	&safe_file_create($filename, $uid, $gid, $mode)
+#
+#	$filename	- form $filename (may form $filename.new first)
+#	$uid		- force owner to be $uid (or -1 to not chown)
+#	$gid		- force group to be $gid (or -1 to not chgrp)
+#	$mode		- permissions / ownership
+#	$rename		- 1 ==> force a rename, 0 ==> ok to create directly
+#
+# returns:
+#	0 ==> safe create was unsuccessful
+#	1 ==> safe create was successful
+#
+sub safe_file_create($$$$$)
+{
+    my ($filename, $uid, $gid, $mode, $rename) = @_;	# get args
+    my $uid_arg;	# $file_uid or -1
+    my $gid_arg;	# $file_gid or -1
+    my $newname;	# $filename.new
+    my $fd;		# file descriptor number of an open file
+
+    # create directly if allowed and we do not need to chown or chgrp
+    #
+    if (!$rename && !defined $file_uid && !defined $file_gid) {
+
+	# create the file in place
+	#
+	if (! sysopen FILE, $filename, O_CREAT|O_RDONLY|O_EXCL, $mode) {
+	    print "DEBUG: could not create $filename\n" if $verbose;
+	    return $false;
+	}
+	close FILE;
+	printf("DEBUG: safely created %s with mode 0%03o\n", $filename, $mode)
+	    if $verbose;
+	return $true;
+
+    # create indirectly and move if allowed and we do not need to chown or chgrp
+    #
+    } elsif ($rename && !defined $file_uid && !defined $file_gid) {
+
+	# create the file on the side
+	#
+	$newname = "$filename.new";
+	if (! sysopen FILE, $newname, O_CREAT|O_RDONLY|O_EXCL, $mode) {
+	    print "DEBUG: couldn't create $newname\n" if $verbose;
+	    return $false;
+	}
+	printf("DEBUG: safely made %s, mode 0%03o\n", $newname, $mode)
+	    if $verbose;
+
+	# move the file in place
+	#
+	if (! rename $newname, $filename) {
+	    print "DEBUG: couldn't mv $newname $filename\n" if $verbose;
+	    return $false;
+	}
+	print "DEBUG: moved $newname to $filename\n" if $verbose;
+	close FILE;
+	return $true;
+    }
+
+    # create the file on the side
+    #
+    $newname = "$filename.new";
+    if ($newname =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	$newname = $1;
+    } else {
+	print "DEBUG: filename.new has chars: $newname" if $verbose;
+	return $false;
+    }
+    if (! sysopen FILE, $newname, O_CREAT|O_RDONLY|O_EXCL, $mode) {
+	print "DEBUG: cannot create $newname\n" if $verbose;
+	return $false;
+    }
+    printf("DEBUG: safely formed %s with mode 0%03o\n", $newname, $mode)
+	if $verbose;
+
+    # determine fchown args
+    #
+    if (defined $file_uid) {
+	$uid_arg = $file_uid;
+    } else {
+	$uid_arg = -1;
+    }
+    if (defined $file_gid) {
+	$gid_arg = $file_gid;
+    } else {
+	$gid_arg = -1;
+    }
+    $fd = fileno FILE;
+
+    # fchown the file
+    #
+    if (syscall(&SYS_fchown, $fd, $uid_arg, $gid_arg) != 0) {
+	print "DEBUG: bad fchown $uid_arg.$gid_arg $newname\n" if $verbose;
+	close FILE;
+	return $false;
+    }
+    print "DEBUG: fchown $uid_arg.$gid_arg $newname\n" if $verbose;
+
+    # move the file in place
+    #
+    if (! rename $newname, $filename) {
+	print "DEBUG: cannot mv $newname $filename\n" if $verbose;
+	return $false;
+    }
+    print "DEBUG: mv $newname $filename\n" if $verbose;
+    close FILE;
+    return $true;
 }
 
 
@@ -970,6 +1101,50 @@ sub prepfile($\$\$\$)
 #	$file		basename of $filename
 #	$gz_dir		where .gz files are to be placed
 #
+# returns:
+#	0 ==> archive was unsuccessful
+#	1 ==> archive was successful or ignored
+#
+# NOTE: It is assumed that our currently directory has been set to $dir.
+#
 sub archive($$$$)
 {
+    my ($filename, $dir, $file, $gz_dir) = @_;	# get args
+
+    # step 0 - Determine if /a/path/file exists
+    #
+    if (! -f $file) {
+	
+	# -T prevents us from touching missing files
+	#
+	if (defined $opt_T) {
+	
+	    print "DEBUG: $filename missing and -T was given\n" if $verbose;
+	    print "DEBUG: nothing to do for $filename\n" if $verbose;
+	    return $true;
+
+	# create file
+	#
+	} else {
+
+	    # create the file
+	    #
+	    if (! &safe_file_create($file, $file_uid, $file_gid,
+	    			    $file_mode, $true)) {
+	    	&warning(31, "could not create $filename");
+		return $false;
+	    }
+	}
+
+	# verfiy that the file still exists
+	#
+	if (! -f $file) {
+	    &warning(32, "created $filename and now it is missing");
+	    return $false;
+	}
+    }
+
+    # all done
+    #
+    return $true;
 }
