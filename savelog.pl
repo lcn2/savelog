@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.1 $
-# @(#) $Id: savelog.pl,v 1.1 2000/01/20 07:41:55 chongo Exp chongo $
+# @(#) $Revision: 1.2 $
+# @(#) $Id: savelog.pl,v 1.2 2000/01/20 18:06:04 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -33,22 +33,23 @@
 ###
 #
 # usage: savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
-#		 [-n] [-z] [-T] [-l] 
+#		 [-n] [-z] [-T] [-l] [-v]
 #		 [-i type [-I typedir]] [-a OLD] [-A archive] file ...
 #
 #	-m mode	   - chmod current files to mode (def: 0644)
 #	-M mode	   - chmod archived files to mode (def: 0444)
 #	-o owner   - chown files to user (def: do not chown)
 #	-g group   - chgrp files to group (def: do not chgrp)
-#	-c count   - save cycle versions of the file, 0=>unlimited (def: 7)
+#	-c count   - cycles of the file to keep, 0=>unlimited (def: 7)
 #	-n	   - gzip the most recent cycle now (def: wait 1 cycle)
 #	-z	   - force the processing of empty files (def: don't)
 #	-T	   - do not create if missing
 #	-l	   - do not gziped any new files (def: gzip after 1st cycle)
-#	-i type	   - form byte offset index files of a given type (def: don't)
-#	-I typedir - dir of type file progs (def: /usr/local/lib/savelog)
+#	-v	   - enable verbose / debug mode
+#	-i type	   - form index files of a given type (def: don't)
+#	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
 #	-a OLD	   - OLD archive dir name (not a path) (def: OLD)
-#	-A archive - form archive symlink under OLD for gzip files (def: don't)
+#	-A archive - form archive symlink for gzip files (def: don't)
 #	file 	   - log file names
 #
 # FYI:
@@ -429,9 +430,189 @@
 # requirements
 #
 use strict;
+use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c $opt_n
+	    $opt_n $opt_z $opt_T $opt_l $opt_v
+	    $opt_i $opt_I $opt_a $opt_A);
+use Getopt::Std;
 
 # my vars
 #
+my $usage;		# usage message
+my $file_mode;		# set files to this mode
+my $archive_mode;	# set archived files to this mode
+my $file_uid;		# file owner or undefined
+my $file_gid;		# group owner or undefined
+my $cycle;		# number of cycles to keep in archive
+my $verbose;		# defined if verbose DEBUG mode is on
+my $indx_prog;		# indexing program of undefined
+my $old_dir;		# name of the OLD directory
+my $archive_dir;	# where the archive symlink should point
 
 # setup
 #
+$usage = "usage:\n" .
+	 "$0 [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]\n" .
+	 "\t[-n] [-z] [-T] [-l] [-v]\n" .
+	 "\t[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...\n" .
+	 "\t\n" .
+	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
+	 "\t-M mode\t chmod archived files to mode (def: 0444)\n" .
+	 "\t-o owner\t chown files to user (def: do not chown)\n" .
+	 "\t-g group\t chgrp files to group (def: do not chgrp)\n" .
+	 "\t-c count\t cycles of the file to keep, 0=>unlimited (def: 7)\n" .
+	 "\t-n\t gzip the most recent cycle now (def: wait 1 cycle)\n" .
+	 "\t-z\t force the processing of empty files (def: don't)\n" .
+	 "\t-T\t do not create if missing\n" .
+	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
+	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
+	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
+	 "\t-a OLD\t OLD archive dir name (not a path) (def: OLD)\n" .
+	 "\t-A archive\t form archive symlink for gzip files (def: don't)\n" .
+	 "\tfile ...\tlog file names\n";
+
+# main
+#
+MAIN:
+{
+    # my vars
+    #
+
+    # parse args
+    #
+    &parse();
+}
+
+
+# parse - parse the command line args
+#
+sub parse {
+
+    # my local vars
+    #
+    my $indx_type;		# type of indexing to perform or undefined
+    my $indx_dir;		# directory containing indexing progs
+
+    # defaults
+    #
+    $verbose = undef;
+    $file_mode = 0644;
+    $archive_mode = 0444;
+    $file_uid = undef;
+    $file_gid = undef;
+    $cycle = 7;
+    $verbose = undef;
+    $indx_type = undef;
+    $indx_dir = "/usr/local/lib/savelog";
+    $indx_prog = undef;
+    $old_dir = "OLD";
+    $archive_dir = undef;
+
+    # parse args
+    #
+    if (!getopts('m:M:o:g:c:nzTlvi:I:a:A:') || !defined($ARGV[0])) {
+    	die $usage;
+	exit 1;
+    }
+
+    # set/check global mode values
+    #
+
+    # -v
+    #
+    $verbose = $opt_v if defined $opt_v;
+    print "DEBUG: verbose mode: set\n" if $verbose;
+
+    # -m mode
+    #
+    $file_mode = oct($opt_m) if defined $opt_m;
+    printf "DEBUG: file mode: 0%o\n", $file_mode;
+
+    # -M mode
+    #
+    $archive_mode = oct($opt_M) if defined $opt_M;
+    printf "DEBUG: archive mode: 0%o\n", $archive_mode;
+
+    # -o owner
+    #
+    if (defined($opt_o)) {
+	$file_uid = getpwnam($opt_o) if defined $opt_o;
+	if (!defined($file_uid)) {
+	    print STDERR "$0: no such user: $opt_o\n";
+	    exit 2;
+	}
+	print "DEBUG: set file uid: $file_uid\n" if $verbose;
+    }
+
+    # -g group
+    #
+    if (defined($opt_g)) {
+	$file_gid = getgrnam($opt_g) if defined $opt_g;
+	if (!defined($file_gid)) {
+	    print STDERR "$0: no such group: $opt_g\n";
+	    exit 3;
+	}
+	print "DEBUG: set file uid: $file_gid\n" if $verbose;
+    }
+
+    # -c cycle
+    #
+    $cycle = $opt_c if defined $opt_c;
+    if ($cycle < 0) {
+	print STDERR "$0: cycles to keep: $cycle must be >= 0\n";
+	exit 4;
+    }
+
+    # -i indx_type
+    #
+    if (defined $opt_i) {
+	$indx_type = $opt_i;
+	if ($indx_type =~ m:[/~*?[]:) {
+	    print STDERR "$0: index type may not contain /, ~, *, ?, or [\n";
+	    exit 5;
+	}
+	if ($indx_type eq "." || $indx_type eq "..") {
+	    print STDERR "$0: index type may not be . or ..\n";
+	    exit 6;
+	}
+	print "DEBUG: index type: $indx_type\n" if $verbose;
+    }
+
+    # -I typedir
+    #
+    if (defined $opt_I) {
+	if (!defined $opt_i) {
+	    die "$0: use of -I typedir requires -i indx_type\n";
+	    exit 7;
+	}
+	if (! -d $opt_I) {
+	    die "$0: no such index type directory: $opt_I\n";
+	    exit 8;
+	}
+	$indx_dir = $opt_I;
+	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
+    }
+    if (defined($indx_type)) {
+    	if (! -x "$indx_dir/$indx_type") {
+	    die "$0: index type prog: $indx_type not found in: $indx_dir\n";
+	    exit 9;
+	}
+	$indx_prog = "$indx_dir/$indx_type";
+	print "DEBUG: indexing prog: $indx_prog\n";
+    }
+
+    # -a OLDname
+    #
+    $old_dir = $opt_a if defined $opt_a;
+    if ($old_dir =~ m:[/~*?[]:) {
+	print STDERR "$0: OLD dir name may not contain /, ~, *, ?, or [\n";
+	exit 3;
+    }
+    if ($old_dir eq "." || $old_dir eq "..") {
+	print STDERR "$0: OLD dir name may not be . or ..\n";
+	exit 4;
+    }
+
+    # -A archive_dir
+    #
+    $archive_dir = $opt_A if defined $opt_A;
+}
