@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.2 $
-# @(#) $Id: savelog.pl,v 1.2 2000/01/20 18:06:04 chongo Exp chongo $
+# @(#) $Revision: 1.3 $
+# @(#) $Id: savelog.pl,v 1.3 2000/01/21 15:30:36 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -48,7 +48,7 @@
 #	-v	   - enable verbose / debug mode
 #	-i type	   - form index files of a given type (def: don't)
 #	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
-#	-a OLD	   - OLD archive dir name (not a path) (def: OLD)
+#	-a OLD	   - OLD directory name (not a path) (def: OLD)
 #	-A archive - form archive symlink for gzip files (def: don't)
 #	file 	   - log file names
 #
@@ -445,8 +445,10 @@ my $file_gid;		# group owner or undefined
 my $cycle;		# number of cycles to keep in archive
 my $verbose;		# defined if verbose DEBUG mode is on
 my $indx_prog;		# indexing program of undefined
-my $old_dir;		# name of the OLD directory
+my $old_name;		# name of the OLD directory
 my $archive_dir;	# where the archive symlink should point
+#
+my $exit_val;		# how we will exit
 
 # setup
 #
@@ -466,7 +468,7 @@ $usage = "usage:\n" .
 	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
-	 "\t-a OLD\t OLD archive dir name (not a path) (def: OLD)\n" .
+	 "\t-a OLD\t OLD directory name (not a path) (def: OLD)\n" .
 	 "\t-A archive\t form archive symlink for gzip files (def: don't)\n" .
 	 "\tfile ...\tlog file names\n";
 
@@ -476,16 +478,113 @@ MAIN:
 {
     # my vars
     #
+    my $file;		# the current file we are processing
 
     # parse args
     #
+    $exit_val = 0;	# hope for the best
     &parse();
+
+    # process each file
+    #
+    foreach $file (@ARGV) {
+	
+	# pre-check file
+	#
+	print "\n" if $verbose;
+	if (! -f $file) {
+	    &warning(20, "cannot read: $file, skipping");
+	    next;
+	}
+
+	# process the file
+	#
+	&savelog($file);
+    }
+
+    # all done
+    #
+    print "\nDEBUG: exit code: $exit_val\n" if $verbose;
+    exit $exit_val;
+}
+
+
+# error - report an error and exit
+#
+# usage:
+#	&error(exitcode, "error format" [,arg ...])
+#
+sub error($$$)
+{
+    # parse args
+    #
+    my ($code, $fmt, $args) = @_;
+    $fmt = "<<no error message given>>" unless defined $fmt;
+    $code = 1 unless defined $code;
+
+    # issue message
+    #
+    print STDERR "$0: ERROR: ";
+    if (defined $args) {
+    	printf STDERR $fmt, $args;
+    } else {
+    	print STDERR $fmt;
+    }
+    print STDERR "\n";
+
+    # exit
+    #
+    print "DEBUG: exit code was: $exit_val\n" if $verbose;
+    $exit_val = $code;
+    print "DEBUG: exit code: $exit_val\n" if $verbose;
+    exit $exit_val;
+}
+
+
+# warning - report an problem and continue
+#
+# usage:
+#	&warning(exitcode, "error format" [,arg ...])
+#
+# NOTE: Unlike
+#
+sub warning($$$)
+{
+    # parse args
+    #
+    my ($code, $fmt, $args) = @_;
+    $fmt = "<<no warning message given>>" unless defined $fmt;
+    $code = 1 unless defined $code;
+
+    # issue message
+    #
+    print STDERR "$0: Warn: ";
+    if (defined $args) {
+    	printf STDERR $fmt, $args;
+    } else {
+    	print STDERR $fmt;
+    }
+    print STDERR "\n";
+
+    # set the exit code but do not exit
+    #
+    print "DEBUG: exit code was: $exit_val\n" if $verbose;
+    $exit_val = $code;
+    print "DEBUG: exit code is now: $exit_val\n" if $verbose;
 }
 
 
 # parse - parse the command line args
 #
-sub parse {
+# usage:
+#	&parse()
+#
+# NOTE: This function cannot check or process the OLD archive dir name nor the
+#	archive symlink because they are relative to the directories of each
+#	of the file args.  That checking must occur later.
+#
+sub parse()
+{
 
     # my local vars
     #
@@ -504,7 +603,7 @@ sub parse {
     $indx_type = undef;
     $indx_dir = "/usr/local/lib/savelog";
     $indx_prog = undef;
-    $old_dir = "OLD";
+    $old_name = "OLD";
     $archive_dir = undef;
 
     # parse args
@@ -514,9 +613,6 @@ sub parse {
 	exit 1;
     }
 
-    # set/check global mode values
-    #
-
     # -v
     #
     $verbose = $opt_v if defined $opt_v;
@@ -525,20 +621,23 @@ sub parse {
     # -m mode
     #
     $file_mode = oct($opt_m) if defined $opt_m;
-    printf "DEBUG: file mode: 0%o\n", $file_mode;
+    if ($file_mode != 0644 && $verbose) {
+	printf "DEBUG: using non-default file mode: 0%o\n", $file_mode;
+    }
 
     # -M mode
     #
     $archive_mode = oct($opt_M) if defined $opt_M;
-    printf "DEBUG: archive mode: 0%o\n", $archive_mode;
+    if ($archive_mode != 0444 && $verbose) {
+	printf "DEBUG: using non-default archive mode: 0%o\n", $archive_mode;
+    }
 
     # -o owner
     #
     if (defined($opt_o)) {
 	$file_uid = getpwnam($opt_o) if defined $opt_o;
 	if (!defined($file_uid)) {
-	    print STDERR "$0: no such user: $opt_o\n";
-	    exit 2;
+	    &error(2, "no such user: $opt_o");
 	}
 	print "DEBUG: set file uid: $file_uid\n" if $verbose;
     }
@@ -548,8 +647,7 @@ sub parse {
     if (defined($opt_g)) {
 	$file_gid = getgrnam($opt_g) if defined $opt_g;
 	if (!defined($file_gid)) {
-	    print STDERR "$0: no such group: $opt_g\n";
-	    exit 3;
+	    &error(3, "no such group: $opt_g");
 	}
 	print "DEBUG: set file uid: $file_gid\n" if $verbose;
     }
@@ -558,8 +656,7 @@ sub parse {
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	print STDERR "$0: cycles to keep: $cycle must be >= 0\n";
-	exit 4;
+	&error(4, "cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -567,12 +664,10 @@ sub parse {
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    print STDERR "$0: index type may not contain /, ~, *, ?, or [\n";
-	    exit 5;
+	    &error(5, "index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    print STDERR "$0: index type may not be . or ..\n";
-	    exit 6;
+	    &error(6, "index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -581,38 +676,61 @@ sub parse {
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    die "$0: use of -I typedir requires -i indx_type\n";
-	    exit 7;
+	    &error(7, "use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    die "$0: no such index type directory: $opt_I\n";
-	    exit 8;
+	    &error(8, "no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    die "$0: index type prog: $indx_type not found in: $indx_dir\n";
-	    exit 9;
+	    &error(9, "index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
-	print "DEBUG: indexing prog: $indx_prog\n";
+	print "DEBUG: indexing prog: $indx_prog\n" if $verbose;
     }
 
     # -a OLDname
     #
-    $old_dir = $opt_a if defined $opt_a;
-    if ($old_dir =~ m:[/~*?[]:) {
-	print STDERR "$0: OLD dir name may not contain /, ~, *, ?, or [\n";
-	exit 3;
+    $old_name = $opt_a if defined $opt_a;
+    if ($old_name =~ m:[/~*?[]:) {
+	&error(10, "OLD dir name may not contain /, ~, *, ?, or [");
     }
-    if ($old_dir eq "." || $old_dir eq "..") {
-	print STDERR "$0: OLD dir name may not be . or ..\n";
-	exit 4;
+    if ($old_name eq "." || $old_name eq "..") {
+	&error(11, "OLD dir name may not be . or ..");
+    }
+    if ($old_name ne "OLD" && $verbose) {
+	print "DEBUG: using non-default OLD name: $old_name\n" if $verbose;
     }
 
     # -A archive_dir
     #
-    $archive_dir = $opt_A if defined $opt_A;
+    if (defined $opt_A) {
+	if (! -d $opt_A) {
+	    &error(12, "archive directory not found: $opt_A");
+	}
+	$archive_dir = $opt_A;
+	print "DEBUG: archive directory: $archive_dir\n" if $verbose;
+    }
+
+    # must have at least one arg
+    #
+    die $usage unless defined $ARGV[0];
+    print "DEBUG: end of argument parse\n" if $verbose;
+}
+
+
+# savelog - archive a file
+#
+sub savelog($)
+{
+    # parse args
+    #
+    my $file = $_[0];	# file name to save
+
+    # archvie setup
+    #
+    print "DEBUG: starting to process: $file\n" if $verbose;
 }
