@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.1 $
-# @(#) $Id: savelog,v 2.1 2000/02/06 00:47:01 chongo Exp chongo $
+# @(#) $Revision: 2.2 $
+# @(#) $Id: savelog,v 2.2 2000/02/06 01:24:32 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -531,6 +531,7 @@ my $true = 1;		# truth as we know it
 my $false = 0;		# genuine falseness
 #
 my %dir_cache;		# $dir_cache{$dir} - \@list of archived files in $dir
+my @walk_files;		# list if files found by walk_dir()
 
 # setup
 #
@@ -564,10 +565,6 @@ $usage = "usage:\n" .
 #
 MAIN:
 {
-    # my vars
-    #
-    my $file;		# the current file we are processing
-
     # setup
     #
     $exit_val = 0;	# hope for the best
@@ -586,25 +583,28 @@ MAIN:
     } else {
 	$gzip = "gzip";
     }
+    umask 0;
 
     # parse args
     #
     &parse();
+    @ARGV = map { &untaint($_) } @ARGV;
 
     # perform tree walking if -R
     #
-    if (defined $opt_R) {
-
-	@ARGV = map { &untaint($_) } @ARGV;
-	find(\&process_dir, @ARGV);
-
-    # process each file (without -R)
+    # We place the list of files to process on the command line
+    # so that we process files from the current directory instead
+    # of from chdir-ed directory (as the result of the find()).
     #
-    } else {
+    if (defined $opt_R) {
+	find(\&walk_dir, @ARGV);
+	@ARGV = sort @walk_files;
+    }
 
-	foreach $file (@ARGV) {
-	    &process_file($file);
-	}
+    # process each file
+    #
+    foreach my $file (@ARGV) {
+	&process_file($file);
     }
 
     # all done
@@ -678,18 +678,20 @@ sub warn_msg($$@)
 }
 
 
-# process_dir - archive files under a dir via the find function
+# walk_dir - file tree walker
 #
 # usage:
-#	find(\&process_dir, @DIR_LIST);
+#	find(\&walk_dir, @DIR_LIST);
 #
 #	$dir	directory to proecss
 #
-# NOTE: This function will blindly attempt to start to walk down any directory.
-#	While the find process will exclude dirs under the -R rules (see above)
-#	it is willing to start walk down any directory.
+# This function pushes the file names onto the array @walk_files.
 #
-sub process_dir($)
+# NOTE: This function will blindly attempt to start to walk down any directory.
+#	While the tree walking will exclude dirs under the -R rules (see above)
+#	it is willing to start walk down any directory regardless of name.
+#
+sub walk_dir($)
 {
     my $name = $_;	# the basename found by find()
 
@@ -700,7 +702,7 @@ sub process_dir($)
     } else {
 	# disable further tree walking on a tainted name
 	#
-	print "DEBUG: process_dir: tainted path: $File::Find::name\n"
+	print "DEBUG: walk_dir: tainted path: $File::Find::name\n"
 	 	if $verbose;
 	$File::Find::prune = $true;
     	return;
@@ -720,7 +722,7 @@ sub process_dir($)
 
 	# disable further tree walking
 	#
-	print "DEBUG: process_dir: pruning dir: $File::Find::name\n"
+	print "DEBUG: walk_dir: pruning dir: $File::Find::name\n"
 		if $verbose;
 	$File::Find::prune = $true;
 	return;
@@ -729,7 +731,7 @@ sub process_dir($)
     # ignore symlinks
     #
     if (-l $name) {
-	print "DEBUG: process_dir: ignoring symlink: $File::Find::name\n"
+	print "DEBUG: walk_dir: ignoring symlink: $File::Find::name\n"
 		if $verbose;
 	return;
     }
@@ -737,7 +739,7 @@ sub process_dir($)
     # pass thru directories
     #
     if (-d $name) {
-	print "DEBUG: process_dir: passing dir: $File::Find::name\n"
+	print "DEBUG: walk_dir: passing dir: $File::Find::name\n"
 		if $verbose;
 	return;
     }
@@ -745,7 +747,7 @@ sub process_dir($)
     # ignore other non-files
     #
     if (! -f $name) {
-	print "DEBUG: process_dir: ignoring non-file: $File::Find::name\n"
+	print "DEBUG: walk_dir: ignoring non-file: $File::Find::name\n"
 		if $verbose;
 	return;
     }
@@ -755,14 +757,14 @@ sub process_dir($)
     #	     	   that match m#\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$#
     #
     if ($name =~ /\.gz$|\.indx$|\.new$|^\.|\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$/) {
-	print "DEBUG: process_dir: ignoring file: $File::Find::name\n"
+	print "DEBUG: walk_dir: ignoring file: $File::Find::name\n"
 		if $verbose;
 	return;
     }
 
-    # process the file
+    # save the full path of this file for processing
     #
-    &process_file($name);
+    push(@walk_files, $File::Find::name);
     return;
 }
 
@@ -796,14 +798,14 @@ sub process_file($)
     }
     if (! (($status, $dir, $gz_dir, $have_archive) = &prep_file($file)) ) {
 	print STDERR "error while preparing for $file, skipping\n";
-	next;
+	return;
     }
 
     # archive the file
     #
     if (! &archive($file, $dir, $gz_dir, $have_archive)) {
 	print STDERR "error while processing $file\n";
-	next;
+	return;
     }
     if ($verbose && defined $opt_n) {
 	print "DEBUG: finished with: $file\n" if $verbose;
@@ -871,17 +873,19 @@ sub parse()
     #
     $file_mode = oct($opt_m) if defined $opt_m;
     if ($file_mode != 0644 && $verbose) {
-	printf "DEBUG: using non-default file mode: 0%03o\n", $file_mode;
+	printf "DEBUG: using non-default file mode: 0%03o\n", $file_mode
+		if $verbose;
     }
 
     # -M mode
     #
-    $archive_mode = $opt_M if defined $opt_M;
     # turn on exec bits in $archdir_mode as well as any write bits
     # found in $archive_mode.
+    #
+    $archive_mode = oct($opt_M) if defined $opt_M;
     if ($archive_mode != 0444) {
-	printf "DEBUG: non-default archive mode: 0%03o\n", $archive_mode
-	   if $verbose;
+	printf("DEBUG: non-default archive mode: 0%03o\n", $archive_mode)
+		if $verbose;
     	$archdir_mode = 0700;
 	if (($archive_mode & 0060) != 0) {
 	    $archdir_mode |= (($archive_mode & 0060) | 0010);
@@ -889,7 +893,8 @@ sub parse()
 	if (($archive_mode & 0006) != 0) {
 	    $archdir_mode |= (($archive_mode & 0006) | 0001);
 	}
-	printf "DEBUG: non-default archive dir mode: 0%03o\n", $archdir_mode;
+	printf "DEBUG: non-default archive dir mode: 0%03o\n", $archdir_mode
+		if $verbose;
     } else {
     	$archdir_mode = 0755;
     }
@@ -1165,7 +1170,7 @@ sub prep_file($\$\$\$)
     (undef, undef, $mode, undef) = stat("$dir/$oldname");
     $mode &= 07777;
     if ($mode != $archdir_mode) {
-	if (chmod($archdir_mode, "$dir/$oldname")) {
+	if (chmod($archdir_mode, "$dir/$oldname") == 1) {
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
@@ -1183,7 +1188,7 @@ sub prep_file($\$\$\$)
 	(undef, undef, $mode, undef) = stat($gz_dir);
 	$mode &= 07777;
 	if ($mode != $archdir_mode) {
-	    if (chmod($archdir_mode, $gz_dir)) {
+	    if (chmod($archdir_mode, $gz_dir) == 1) {
 		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
@@ -1243,7 +1248,7 @@ sub safe_file_create($$$$$)
 	}
 	close FILE;
 	printf("DEBUG: safely created %s with mode 0%03o\n", $file, $mode)
-	    if $verbose;
+		if $verbose;
 	return $true;
 
     # create indirectly and move if allowed and we do not need to chown or chgrp
@@ -1267,7 +1272,7 @@ sub safe_file_create($$$$$)
 	    return $false;
 	}
 	printf("DEBUG: safely made %s, mode 0%03o\n", $newname, $mode)
-	    if $verbose;
+		if $verbose;
 
 	# move the file in place
 	#
@@ -1298,7 +1303,7 @@ sub safe_file_create($$$$$)
 	return $false;
     }
     printf("DEBUG: safely formed %s with mode 0%03o\n", $newname, $mode)
-	if $verbose;
+	    if $verbose;
 
     # determine fchown args
     #
@@ -1930,9 +1935,10 @@ sub gzip($$$)
 	# chmod the archived file
 	#
 	$file = &untaint($file);
-	if (chmod($archive_mode, "$file")) {
-	    &warn_msg(45, "chmod 0%03o $file failed", $archive_mode);
+	if (chmod($archive_mode, "$file.gz") != 1) {
+	    &warn_msg(45, "chmod 0%03o $file.gz failed", $archive_mode);
 	}
+	printf("DEBUG: chmod 0%03o $file.gz\n", $archive_mode) if $verbose;
 
     # gzip the file into $dir
     #
@@ -1969,9 +1975,10 @@ sub gzip($$$)
 
 	# chmod the archived file
 	#
-	if (chmod($archive_mode, "$file")) {
+	if (chmod($archive_mode, "$dir/$base.gz") != 1) {
 	    &warn_msg(48, "chmod 0%03o $dir/$base.gz failed",$archive_mode);
 	}
+	printf("DEBUG: chmod 0%03o $dir/$base.gz\n", $archive_mode) if $verbose;
     }
     return $true;
 }
@@ -2234,12 +2241,17 @@ sub archive($$$$)
     $$single[0] = &untaint($$single[0]);
     if (defined $opt_n) {
 	print "mv -f $$single[0] $tstamp2\n";
+	printf("chmod 0%03o $tstamp2\n", $archive_mode);
     } else {
     	if (!rename ($$single[0], $tstamp2)) {
 	    &warn_msg(58, "failed to rename $$single[0] to $tstamp2");
 	    return $false;
 	}
 	print "DEBUG: mv -f $$single[0] $tstamp2\n" if $verbose;
+	if (chmod($archive_mode, $tstamp2) != 1) {
+	    &warn_msg(59, "chmod 0%03o $tstamp2 failed", $archive_mode);
+	}
+	printf("DEBUG: chmod 0%03o $tstamp2\n", $archive_mode) if $verbose;
     }
 
     # step 9 - The file /a/path/file is hardlinked to /a/path/OLD/file.now
@@ -2248,7 +2260,7 @@ sub archive($$$$)
 	print "ln -f $file $dir/$oldname/$base.$now\n";
     } else {
 	if (! &hard_link($file, "$dir/$oldname/$base.$now")) {
-	    &warn_msg(59, "failed to hardlink $file onto %s",
+	    &warn_msg(60, "failed to hardlink $file onto %s",
 		      "$dir/$oldname/$base.$now");
 	    return $false;
 	}
@@ -2256,13 +2268,31 @@ sub archive($$$$)
 
     # step 10 - if -i then process the index files for the file.tstamp-now
     #
+    # We continue on to step 11 even if something goes wrong with indexing
+    # because an indexing failure should not impact later steps.
+    #
     if (defined $opt_i) {
 	if ($opt_n) {
 	    print "$indx_prog $$single[0]-$now $$single[0]-$now.indx\n";
+	    printf("chmod 0%03o $$single[0]-$now.indx\n", $archive_mode);
 	} else {
 	    print "DEBUG: $indx_prog $$single[0]-$now $$single[0]-$now.indx\n"
-	    	if $verbose;
-	    system("$indx_prog", "$$single[0]-$now", "$$single[0]-$now.indx");
+		    if $verbose;
+	    if (system("$indx_prog", "$$single[0]-$now",
+	    		"$$single[0]-$now.indx") != 0) {
+		&warm_msg(61, "$indx_prog $$single[0]-$now " .
+			      "$$single[0]-$now.indx failed");
+	    }
+	    if (-f "$$single[0]-$now.indx") {
+		if (chmod($archive_mode, "$$single[0]-$now.indx") != 1) {
+		    &warn_msg(62, "chmod 0%03o $$single[0]-$now.indx failed",
+		    		  $archive_mode);
+		}
+		printf("DEBUG: chmod 0%03o $$single[0]-$now.indx\n",
+			$archive_mode) if $verbose;
+	    } else {
+		&warn_msg(63, "index file wasn't made: $$single[0]-$now.indx");
+	    }
 	}
     }
 
