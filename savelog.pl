@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.6 $
-# @(#) $Id: savelog,v 2.6 2000/10/04 23:34:49 chongo Exp root $
+# @(#) $Revision: 2.7 $
+# @(#) $Id: savelog,v 2.7 2002/01/11 01:34:11 root Exp root $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -508,6 +508,7 @@ use File::Basename;
 use File::Copy;
 use IO::File;
 use File::Find;
+require 'syscall.ph';
 
 # my vars
 #
