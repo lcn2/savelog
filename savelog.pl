@@ -1,9 +1,9 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -Tw
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.7 $
-# @(#) $Id: savelog.pl,v 1.7 2000/01/24 09:05:22 chongo Exp chongo $
+# @(#) $Revision: 1.8 $
+# @(#) $Id: savelog.pl,v 1.8 2000/01/24 09:11:06 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -672,9 +672,12 @@ sub parse()
     #
     if (defined($opt_o)) {
 	if ($EFFECTIVE_USER_ID == 0) {
-	    $file_uid = getpwnam($opt_o) if defined $opt_o;
-	    if (!defined($file_uid)) {
-		&error(4, "no such user: $opt_o");
+	    if ($opt_o =~ m#^([\w.][\w.-]*)$#) {
+		$opt_o = $1;
+		$file_uid = getpwnam($opt_o);
+	    }
+	    if (!defined $file_uid) {
+		&error(4, "bad user: $opt_o");
 	    }
 	    print "DEBUG: set file uid: $file_uid\n" if $verbose;
         } else {
@@ -686,11 +689,14 @@ sub parse()
     #
     if (defined($opt_g)) {
 	if ($EFFECTIVE_USER_ID == 0) {
-	    $file_gid = getgrnam($opt_g) if defined $opt_g;
-	    if (!defined($file_gid)) {
-		&error(6, "no such group: $opt_g");
+	    if ($opt_g =~ m#^([\w.][\w.-]*)$#) {
+		$opt_g = $1;
+		$file_gid = getgrnam($opt_g);
 	    }
-	    print "DEBUG: set file uid: $file_gid\n" if $verbose;
+	    if (!defined $file_gid) {
+		&error(6, "bad group: $opt_g");
+	    }
+	    print "DEBUG: set file gid: $file_gid\n" if $verbose;
         } else {
 	    &error(7, "only the superuser can use -g");
 	}
