@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.9 $
-# @(#) $Id: savelog.pl,v 1.9 2000/01/24 09:27:15 chongo Exp chongo $
+# @(#) $Revision: 1.10 $
+# @(#) $Id: savelog.pl,v 1.10 2000/01/27 18:51:17 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -507,6 +507,16 @@ MAIN:
 
 $opt_n = 1;	# XXX - DEBUG
 
+
+    # setup
+    #
+    $exit_val = 0;	# hope for the best
+    $cwd = cwd();
+
+    # parse args
+    #
+    &parse();
+
 # XXX - debug
 #
 # my (@list, @single, @gz, @plain, @double, @index);
@@ -520,16 +530,17 @@ $opt_n = 1;	# XXX - DEBUG
 # print "\nplain list:\n", join("\n", @plain), "\n";
 # print "\ndouble list:\n", join("\n", @double), "\n";
 # print "\nindex list:\n", join("\n", @index), "\n";
+# print "\ncycles: $cycle, double last: $#double\n";
+# if ($cycle > 0 && $#double ge $cycle-1) {
+# &rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# print "\nall list:\n", join("\n", @list), "\n";
+# print "\nsingle list:\n", join("\n", @single), "\n";
+# print "\ngz list:\n", join("\n", @gz), "\n";
+# print "\nplain list:\n", join("\n", @plain), "\n";
+# print "\ndouble list:\n", join("\n", @double), "\n";
+# print "\nindex list:\n", join("\n", @index), "\n";
+# }
 # exit(0);
-
-    # setup
-    #
-    $exit_val = 0;	# hope for the best
-    $cwd = cwd();
-
-    # parse args
-    #
-    &parse();
 
     # process each file
     #
@@ -678,9 +689,12 @@ sub parse()
 
     # -M mode
     #
-    $archive_mode = oct($opt_M) if defined $opt_M;
-    if ($archive_mode != 0444 && $verbose) {
-	printf "DEBUG: non-default archive mode: 0%03o\n", $archive_mode;
+    $archive_mode = $opt_M if defined $opt_M;
+    # turn on exec bits in $archdir_mode as well as any write bits
+    # found in $archive_mode.
+    if ($archive_mode != 0444) {
+	printf "DEBUG: non-default archive mode: 0%03o\n", $archive_mode
+	   if $verbose;
     	$archdir_mode = 0700;
 	if (($archive_mode & 0060) != 0) {
 	    $archdir_mode |= (($archive_mode & 0060) | 0010);
@@ -1407,6 +1421,61 @@ sub splitlist(\@\@\@\@\@\@)
     }
 }
 
+
+# rmcycles - split a list of files into single, double, gz and index files
+#
+# given:
+#	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index)
+#
+#	@list		a list of archived files (from scandir, for example)
+#	@single		files of the form name\.\d{10}
+#	@gz		files of the form name\.\d{10}\-\d{10}\.gz
+#	@plain		files of the form name\.\d{10}\-\d{10}
+#	@double		both @gz and @plain files
+#	@index		files of the form name\.\d{10}\-\d{10}\.inedx
+#
+# This function will all but the last $cycle-1 files found in \@double.
+# We remove all but the last (most recent) $cycle-1 files instead of
+# $cycle files because later on we will archive the current file and
+# form a new cycle.
+#
+# NOTE: The reason why the other arrays are passed in is so that \@list,
+#	\@gz and \@plain will have removed files removed from them as well.
+#
+sub rmcycles(\@\@\@\@\@\@)
+{
+    my ($list, $single, $gz, $plain, $double, $index) = @_;	# get args
+    my $i;
+
+    # Remove all but the oldest $cycle-1 files found in @$double
+    #
+    return unless $#$double ge $cycle-1;
+    for ($i=0; $i <= $#$double-$cycle+1; ++$i) {
+	&rm($$double[$i], "keeping newest $cycle-1 cycles");
+    }
+    splice @$double, 0, $i;
+
+    # rebuild @$list
+    #
+    $#$list = -1;
+    push(@$list, @$single);
+    push(@$list, @$double);
+
+    # rebuild @$gz and @$plain
+    #
+    $#$gz = -1;
+    $#$plain = -1;
+    for ($i=0; $i <= $#$double; ++$i) {
+	if ($$double[$i] =~ /\.gz$/) {
+	    push @$gz, $$double[$i];
+	} else {
+	    push @$plain, $$double[$i];
+	}
+    }
+    return;
+}
+
+
 # archive - archive a file
 #
 # usage:
@@ -1475,11 +1544,14 @@ sub archive($$$$)
 	return $true;
     }
 
-    # step 2 - Remove all but the newest cycles if not blocked
+    # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
     &scandir($file, $oldname, "$oldname/archive", \@list);
     &cleanlist(\@list);
     &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@indx);
+    if ($cycle > 0 && $#double ge $cycle-1) {
+	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@indx);
+    }
 
     # all done
     #
