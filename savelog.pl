@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.18 $
-# @(#) $Id: savelog.pl,v 1.18 2000/01/30 11:15:47 chongo Exp chongo $
+# @(#) $Revision: 1.20 $
+# @(#) $Id: savelog.pl,v 1.20 2000/01/31 07:26:48 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -1939,11 +1939,22 @@ sub archive($$$$)
 	}
     }
 
+    # XXX - misc debug stuff
+    #
+    # print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
+    # print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
+    # print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
+    # print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
+    # print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
+    # print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
+
     # step 6 - Create /a/path/.file.new with the proper mode, uid and gid
     # step 7 - Move /a/path/.file.new to /a/path/file
     #
-    if (! defined $opt_n) {
-	print "rm -f $dir/.$base.new\n";
+    if (defined $opt_n) {
+	if (-f "$dir/.$base.new") {
+	    print "rm -f $dir/.$base.new\n";
+	}
 	print ":> $dir/.$base.new\n";
 	print "mv -f $dir/.$base.new $file\n";
     } else {
@@ -1959,14 +1970,30 @@ sub archive($$$$)
     }
     print "DEBUG: created new $file\n" if $verbose;
 
-    # XXX - misc debug stuff
+    # step 8 - /a/path/OLD/file.tstamp renamed /a/path/file.tstamp-now
     #
-    # print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
-    # print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
-    # print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
-    # print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
-    # print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
-    # print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
+    $i = "$single[0]-" . time();
+    if ($i =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	$i = $1;
+    } else {
+	&warn_msg(105, "unsafe file.tstamp-now filename: $i");
+	return;
+    }
+    if ($single[0] =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	$single[0] = $1;
+    } else {
+	&warn_msg(106, "unsafe file.tstamp filename: $single[0]");
+	return;
+    }
+    if (defined $opt_n) {
+	print "mv -f $single[0] $i\n";
+    } else {
+    	if (!rename ($single[0], $i)) {
+	    &warn_msg(107, "failed to rename $single[0] to $i");
+	    return $false;
+	}
+	print "DEBUG: renamed $single[0] to $i\n" if $verbose;
+    }
 
     # all done
     #
