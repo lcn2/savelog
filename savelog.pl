@@ -2,9 +2,9 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision$
-# @(#) $Id$
-# @(#) $Source$
+# @(#) $Revision: 1.1 $
+# @(#) $Id: savelog.pl,v 1.1 2000/01/20 07:41:55 chongo Exp chongo $
+# @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -343,7 +343,7 @@
 #
 #	   Assertion: At this point the file exists or we have stopped.
 #
-#	1) Determine if /a/path is missing or empty.  Do nothing else if empty
+#	1) Determine if /a/path is empty.  Do nothing else if empty
 #	   unless -z was given.
 #
 #	   Assertion: At this point the file is non-empty or -z was given
@@ -351,7 +351,8 @@
 #
 #	2) Remove all but the newest count-1 cycles and, if they exist
 #	   unless count is 0.  Remove any index file that is not associated 
-#	   with a (non-removed) file.
+#	   with a (non-removed) file.  Files are removed from under /a/path/OLD
+#	   or from under /a/path/OLD/archive if archive exists.
 #
 #	   Assertion: At this point only count-1 cycles exist, or '-c 0'
 #		      was given and no files were removed.
