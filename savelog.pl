@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.4 $
-# @(#) $Id: savelog,v 2.4 2000/02/22 08:43:28 root Exp root $
+# @(#) $Revision: 2.5 $
+# @(#) $Id: savelog,v 2.5 2000/06/15 23:41:17 root Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -561,6 +561,28 @@ $usage = "usage:\n" .
 	 "\t\n" .
 	 "\t-R\t args are directories under which most files are archived\n";
 
+# function prototypes
+#
+sub err_msg($$@);
+sub warn_msg($$@);
+sub walk_dir($);
+sub process_file($);
+sub parse();
+sub untaint($);
+sub prep_file($);
+sub safe_file_create($$$$$$$);
+sub tstamp_cmp();
+sub load_dir($);
+sub scan_dir($$$$);
+sub rm($$);
+sub clean_list(@);
+sub split_list(@);
+sub rm_cycles(@@);
+sub clean_tstamp($@);
+sub gzip($$$);
+sub hard_link($$);
+sub archive($$$$);
+
 # main
 #
 MAIN:
@@ -587,8 +609,8 @@ MAIN:
 
     # parse args
     #
-    &parse();
-    @ARGV = map { &untaint($_) } @ARGV;
+    parse();
+    @ARGV = map { untaint($_) } @ARGV;
 
     # perform tree walking if -R
     #
@@ -604,7 +626,7 @@ MAIN:
     # process each file
     #
     foreach my $file (@ARGV) {
-	&process_file($file);
+	process_file($file);
     }
 
     # all done
@@ -616,7 +638,7 @@ MAIN:
 # err_msg - report an error and exit
 #
 # usage:
-#	&err_msg(exitcode, "error format" [,arg ...])
+#	err_msg(exitcode, "error format" [,arg ...])
 #
 sub err_msg($$@)
 {
@@ -648,7 +670,7 @@ sub err_msg($$@)
 # warn_msg - report an problem and continue
 #
 # usage:
-#	&warn_msg(exitcode, "warning format" [,arg ...])
+#	warn_msg(exitcode, "warning format" [,arg ...])
 #
 # NOTE: Unlike
 #
@@ -681,7 +703,7 @@ sub warn_msg($$@)
 # walk_dir - file tree walker
 #
 # usage:
-#	find(\&walk_dir, @DIR_LIST);
+#	find(\walk_dir, @DIR_LIST);
 #
 #	$dir	directory to proecss
 #
@@ -772,7 +794,7 @@ sub walk_dir($)
 # process_file - archive a file
 #
 # usage:
-#	&process_file($file);
+#	process_file($file);
 #
 #	$file	filename to process
 #
@@ -796,14 +818,14 @@ sub process_file($)
 	print "\nDEBUG: starting with: $file\n\n" if $verbose;
 	print "\n# starting with: $file\n\n" if defined $opt_n;
     }
-    if (! (($status, $dir, $gz_dir, $have_archive) = &prep_file($file)) ) {
+    if (! (($status, $dir, $gz_dir, $have_archive) = prep_file($file)) ) {
 	print STDERR "error while preparing for $file, skipping\n";
 	return;
     }
 
     # archive the file
     #
-    if (! &archive($file, $dir, $gz_dir, $have_archive)) {
+    if (! archive($file, $dir, $gz_dir, $have_archive)) {
 	print STDERR "error while processing $file\n";
 	return;
     }
@@ -908,11 +930,11 @@ sub parse()
 		$file_uid = getpwnam($opt_o);
 	    }
 	    if (!defined $file_uid) {
-		&err_msg(4, "parse: bad user: $opt_o");
+		err_msg(4, "parse: bad user: $opt_o");
 	    }
 	    print "DEBUG: set file uid: $file_uid\n" if $verbose;
         } else {
-	    &err_msg(5, "parse: only the superuser can use -o");
+	    err_msg(5, "parse: only the superuser can use -o");
 	}
     }
 
@@ -925,11 +947,11 @@ sub parse()
 		$file_gid = getgrnam($opt_g);
 	    }
 	    if (!defined $file_gid) {
-		&err_msg(6, "parse: bad group: $opt_g");
+		err_msg(6, "parse: bad group: $opt_g");
 	    }
 	    print "DEBUG: set file gid: $file_gid\n" if $verbose;
         } else {
-	    &err_msg(7, "parse: only the superuser can use -g");
+	    err_msg(7, "parse: only the superuser can use -g");
 	}
     }
 
@@ -937,7 +959,7 @@ sub parse()
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	&err_msg(8, "parse: cycles to keep: $cycle must be >= 0");
+	err_msg(8, "parse: cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -945,10 +967,10 @@ sub parse()
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    &err_msg(9, "parse: index type may not contain /, ~, *, ?, or [");
+	    err_msg(9, "parse: index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    &err_msg(10, "parse: index type type may not be . or ..");
+	    err_msg(10, "parse: index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -957,17 +979,17 @@ sub parse()
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    &err_msg(11, "parse: use of -I typedir requires -i indx_type");
+	    err_msg(11, "parse: use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    &err_msg(12, "parse: no such index type directory: $opt_I");
+	    err_msg(12, "parse: no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    &err_msg(13,
+	    err_msg(13,
 	    	"parse: index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
@@ -978,10 +1000,10 @@ sub parse()
     #
     $oldname = $opt_a if defined $opt_a;
     if ($oldname =~ m:[/~*?[]:) {
-	&err_msg(14, "parse: OLD dir name may not contain /, ~, *, ?, or [");
+	err_msg(14, "parse: OLD dir name may not contain /, ~, *, ?, or [");
     }
     if ($oldname eq "." || $oldname eq "..") {
-	&err_msg(15, "parse: OLD dir name may not be . or ..");
+	err_msg(15, "parse: OLD dir name may not be . or ..");
     }
     if ($oldname ne "OLD" && $verbose) {
 	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
@@ -1004,10 +1026,10 @@ sub parse()
 # untaint - untaint a filename
 #
 # usage:
-#	&untaint($file)
+#	untaint($file)
 #
 # returns:
-#	untainted $file or calls &err_msg()
+#	untainted $file or calls err_msg()
 #
 # This function helps ensure that the filenames used to not have bad or
 # dangerous chars in them.  It is designed to pass -T taint-perl inspection.
@@ -1019,7 +1041,7 @@ sub untaint($)
     if ($file =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
     	$file = $1;
     } else {
-	&err_msg(16, "file has dangerous chars: $file");
+	err_msg(16, "file has dangerous chars: $file");
     }
     return $file;
 }
@@ -1028,7 +1050,7 @@ sub untaint($)
 # prep_file - prepare archive a file
 #
 # usage:
-#	($status, $dir, $gz_dir, $have_archive) = &prep_file($file);
+#	($status, $dir, $gz_dir, $have_archive) = prep_file($file);
 #
 #	$file			path of prep file to archive
 #
@@ -1040,7 +1062,7 @@ sub untaint($)
 #    $gz_dir		ref to where .gz files are to be placed
 #    $have_archive	true => we have an OLD/archive
 #
-sub prep_file($\$\$\$)
+sub prep_file($)
 {
     # my vars
     #
@@ -1053,7 +1075,7 @@ sub prep_file($\$\$\$)
 
     # untaint the file
     #
-    $file = &untaint($file);
+    $file = untaint($file);
 
     # determine the file's directory
     #
@@ -1064,7 +1086,7 @@ sub prep_file($\$\$\$)
     #
     if (! -d "$dir/$oldname") {
 	if (! mkdir("$dir/$oldname", $archdir_mode)) {
-	    &warn_msg(17, "cannot mkdir: $dir/$oldname");
+	    warn_msg(17, "cannot mkdir: $dir/$oldname");
 	    return ($false, undef, undef, undef);
 	} else {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
@@ -1078,12 +1100,12 @@ sub prep_file($\$\$\$)
 
         # untaint archive_dir
 	#
-	$archive_dir = &untaint($archive_dir);
+	$archive_dir = untaint($archive_dir);
 
 	# The archive directory must exist
 	#
 	if (! -d $archive_dir) {
-	    &err_msg(18,
+	    err_msg(18,
 	    	"prep_file: archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
@@ -1095,7 +1117,7 @@ sub prep_file($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(19, "prep_file: bad stat archive dir: $archive_dir");
+	    	err_msg(19, "prep_file: bad stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -1103,9 +1125,9 @@ sub prep_file($\$\$\$)
 		# OLD/archive points to a different place (or nowhere), so
 		# we must remove it and form it as a symlink to archive_dir
 		#
-		if (!&rm("$dir/$oldname/archive", "about to symlink") ||
+		if (!rm("$dir/$oldname/archive", "about to symlink") ||
 		    !symlink($archive_dir, "$dir/$oldname/archive")) {
-		    &warn_msg(20,
+		    warn_msg(20,
 			"cannot symlink $dir/$oldname/archive to $archive_dir");
 		    return ($false, undef, undef, undef);
 		}
@@ -1120,11 +1142,11 @@ sub prep_file($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(21, "prep_file: can't stat archive dir: $archive_dir");
+	    	err_msg(21, "prep_file: can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	&warn_msg(22,
+	    	warn_msg(22,
 		    "$dir/$oldname/archive is a dir and is not $archive_dir");
 	    	return ($false, undef, undef, undef);
 	    }
@@ -1136,7 +1158,7 @@ sub prep_file($\$\$\$)
 	    # make OLD/archive a symlink to the archive_dir
 	    #
 	    if (!symlink($archive_dir, "$dir/$oldname/archive")) {
-		&warn_msg(23,
+		warn_msg(23,
 		    "cannot symlink $dir/$oldname/archive to $archive_dir");
 		return ($false, undef, undef, undef);
 	    }
@@ -1174,13 +1196,13 @@ sub prep_file($\$\$\$)
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
-	    &warn_msg(24, "unable to chmod 0%03o OLD directory: %s",
+	    warn_msg(24, "unable to chmod 0%03o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
 	    return ($false, undef, undef, undef);
 	}
     }
     if (! -w "$dir/$oldname") {
-	&warn_msg(25, "OLD directory: $dir/$oldname is not writable");
+	warn_msg(25, "OLD directory: $dir/$oldname is not writable");
     	return ($false, undef, undef, undef);
     }
     #
@@ -1192,13 +1214,13 @@ sub prep_file($\$\$\$)
 		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
-		&warn_msg(26, "unable to chmod 0%03o archive directory: %s",
+		warn_msg(26, "unable to chmod 0%03o archive directory: %s",
 		    $archdir_mode, $gz_dir);
 		return ($false, undef, undef, undef);
 	    }
 	}
 	if (! -w $gz_dir) {
-	    &warn_msg(27, "archive directory: $gz_dir is not writable");
+	    warn_msg(27, "archive directory: $gz_dir is not writable");
 	    return ($false, undef, undef, undef);
 	}
     }
@@ -1212,7 +1234,7 @@ sub prep_file($\$\$\$)
 # safe_file_create - safely create a file with the proper perm, uid and gid
 #
 # usage:
-#	&safe_file_create($file, $uid, $gid, $mode, $rename, $dir, $base);
+#	safe_file_create($file, $uid, $gid, $mode, $rename, $dir, $base);
 #
 #	$file		form $file (may form $file.new first)
 #	$uid		force owner to be $uid (or -1 to not chown)
@@ -1228,7 +1250,7 @@ sub prep_file($\$\$\$)
 #
 # NOTE: This subroutine does not check $opt_n.
 #
-sub safe_file_create($$$$$)
+sub safe_file_create($$$$$$$)
 {
     my ($file, $uid, $gid, $mode, $rename, $dir, $base) = @_;	# get args
     my $uid_arg;	# $file_uid or -1
@@ -1259,11 +1281,11 @@ sub safe_file_create($$$$$)
 	#
 	$dir = dirname($file) if !defined $dir;
 	$base = basename($file) if !defined $base;
-	$newname = &untaint("$dir/.$base.new");
+	$newname = untaint("$dir/.$base.new");
 
 	# untaint old name
 	#
-	$file = &untaint($file);
+	$file = untaint($file);
 
 	# create the file on the side
 	#
@@ -1277,7 +1299,7 @@ sub safe_file_create($$$$$)
 	# move the file in place
 	#
 	if (! rename $newname, $file) {
-	    &warn_msg(28, "couldn't mv $newname $file");
+	    warn_msg(28, "couldn't mv $newname $file");
 	    return $false;
 	}
 	print "DEBUG: moved $newname to $file\n" if $verbose;
@@ -1290,16 +1312,16 @@ sub safe_file_create($$$$$)
     $dir = dirname($file) if !defined $dir;
     $base = basename($file) if !defined $base;
     $newname = "$dir/.$base.new";
-    $newname = &untaint("$dir/.$base.new");
+    $newname = untaint("$dir/.$base.new");
 
     # untaint old name
     #
-    $file = &untaint($file);
+    $file = untaint($file);
 
     # create the file on the side
     #
     if (! sysopen FILE, $newname, O_CREAT|O_RDONLY|O_EXCL, $mode) {
-	&warn_msg(29, "cannot create $newname");
+	warn_msg(29, "cannot create $newname");
 	return $false;
     }
     printf("DEBUG: safely formed %s with mode 0%03o\n", $newname, $mode)
@@ -1322,7 +1344,7 @@ sub safe_file_create($$$$$)
     # fchown the file
     #
     if (syscall(&SYS_fchown, $fd, $uid_arg, $gid_arg) != 0) {
-	&warn_msg(30, "bad fchown $uid_arg.$gid_arg $newname");
+	warn_msg(30, "bad fchown $uid_arg.$gid_arg $newname");
 	close FILE;
 	return $false;
     }
@@ -1331,7 +1353,7 @@ sub safe_file_create($$$$$)
     # move the file in place
     #
     if (! rename $newname, $file) {
-	&warn_msg(31, "cannot mv $newname $file");
+	warn_msg(31, "cannot mv $newname $file");
 	return $false;
     }
     print "DEBUG: mv $newname $file\n" if $verbose;
@@ -1408,7 +1430,7 @@ sub tstamp_cmp()
 # load_dir - load a list with the files of files found in a directory
 #
 # usage:
-#	($status, $list) = &load_dir($dir)
+#	($status, $list) = load_dir($dir)
 #
 #	$dir	directory to scan for files
 #
@@ -1435,7 +1457,7 @@ sub load_dir($)
 	# prep for scanning dir
 	#
 	if (! opendir DIR, $dir) {
-	    &warn_msg(32, "unable to open dir: $dir");
+	    warn_msg(32, "unable to open dir: $dir");
 	    return ($false, undef);
 	}
 
@@ -1461,7 +1483,7 @@ sub load_dir($)
 # scan_dir - scan the OLD and possibly archive dir for archived files
 #
 # usage:
-#	($status, $list) = &scan_dir($file, $base, $olddir, $archdir)
+#	($status, $list) = scan_dir($file, $base, $olddir, $archdir)
 #
 #	$file		archived file to scan for in $olddir or $archdir
 #	$base		basename of $file
@@ -1500,8 +1522,8 @@ sub scan_dir($$$$)
     # scan OLD/ for files of the form base\.\d{9,10} or base\.\d{9,10}\-\d{9,10}
     #
     print "DEBUG: scanning $olddir for $base files\n" if $verbose;
-    if (! (($status, $filelist) = &load_dir($olddir)) ) {
-	&warn_msg(33, "unable to open OLD dir: $olddir");
+    if (! (($status, $filelist) = load_dir($olddir)) ) {
+	warn_msg(33, "unable to open OLD dir: $olddir");
 	return ($false, undef);
     }
     @list = grep m#/$base\.\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}$#, @{$filelist};
@@ -1513,8 +1535,8 @@ sub scan_dir($$$$)
 	# scan the OLD/archive/
 	#
 	print "DEBUG: scanning $archdir for $base files\n" if $verbose;
-	if (! (($status, $filelist2) = &load_dir($archdir)) ) {
-	    &warn_msg(34, "cannot open OLD/archive dir: $archdir");
+	if (! (($status, $filelist2) = load_dir($archdir)) ) {
+	    warn_msg(34, "cannot open OLD/archive dir: $archdir");
 	    return ($false, undef);
 	}
 	push(@list, grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist2});
@@ -1526,8 +1548,8 @@ sub scan_dir($$$$)
 	# scan the OLD/ again
 	#
 	print "DEBUG: scanning $olddir for more $base files\n" if $verbose;
-	if (! (($status, $filelist2) = &load_dir($olddir)) ) {
-	    &warn_msg(35, "can't open OLD/archive dir: $olddir");
+	if (! (($status, $filelist2) = load_dir($olddir)) ) {
+	    warn_msg(35, "can't open OLD/archive dir: $olddir");
 	    return ($false, undef);
 	}
 	push(@list, grep m#/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist2});
@@ -1543,7 +1565,7 @@ sub scan_dir($$$$)
 # rm - remove a file (or not if -n)
 #
 # usage:
-#	&rm($file[, $reason]);
+#	rm($file[, $reason]);
 #
 #	$file		the file to remove
 #	$reason		the reason to remove, if defined
@@ -1566,7 +1588,7 @@ sub rm($$)
 
 	# untaint $file
 	#
-	$file = &untaint($file);
+	$file = untaint($file);
 
 	# unlink
 	#
@@ -1575,7 +1597,7 @@ sub rm($$)
 	    print "DEBUG: rm -f $file\n" if $verbose;
 
 	} else {
-	    &warn_msg(36, "cannot remove $file\n");
+	    warn_msg(36, "cannot remove $file\n");
 	}
     }
 }
@@ -1583,11 +1605,11 @@ sub rm($$)
 
 # clean_list - remove duplicate foo and foo.gz files and stale .indx files
 #
-#	&clean_list(\@list)
+#	clean_list(\@list)
 #
 #	@list		list of archived files of $file to be cleaned
 #
-sub clean_list(\@)
+sub clean_list(@)
 {
     my $list = $_[0];	# get args
     my $prev;		# previous item on list
@@ -1597,7 +1619,7 @@ sub clean_list(\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(37, "clean_list: 2nd argument is not an array reference");
+	err_msg(37, "clean_list: 2nd argument is not an array reference");
     }
 
     # do nothing if the list has 1 or 0 files in it
@@ -1609,7 +1631,7 @@ sub clean_list(\@)
     # deal with the case where a .indx file is the first on the list
     #
     if ($$list[0] =~ /\.indx$/) {
-	&rm($$list[0], "first lone .indx file");
+	rm($$list[0], "first lone .indx file");
 	splice @$list, 0, 1;
     }
 
@@ -1625,13 +1647,13 @@ sub clean_list(\@)
 	# firewall - catch dup and bogus sorting
 	#
 	if ($prev eq $cur) {
-	    &err_msg(38, "clean_list: found duplicate list item: $cur");
+	    err_msg(38, "clean_list: found duplicate list item: $cur");
 	}
 
 	# catch foo and foo.gz and remove foo
 	#
 	if ("$prev.gz" eq $cur) {
-	    &rm($prev, "also found $cur");
+	    rm($prev, "also found $cur");
 	    splice @$list, $i-1, 1;
 	    --$i;
 	}
@@ -1645,7 +1667,7 @@ sub clean_list(\@)
 	    #
 	    ($baseindx = $cur) =~ s/\.indx$//;
 	    if ($baseindx ne $prev && "$baseindx.gz" ne $prev) {
-		&rm($cur, "lone .indx file");
+		rm($cur, "lone .indx file");
 		splice @$list, $i, 1;
 		--$i;
 	    }
@@ -1657,7 +1679,7 @@ sub clean_list(\@)
 # split_list - split a list of files into single, double, gz and index files
 #
 # given:
-#	($status, $single, $gz, $plain, $double, $index) = &split_list(\@list);
+#	($status, $single, $gz, $plain, $double, $index) = split_list(\@list);
 #
 #	@list		a list of archived files (from scan_dir, for example)
 #
@@ -1671,7 +1693,7 @@ sub clean_list(\@)
 #    @{$double}		both @gz and @plain files
 #    @{$index}		files of the form name\.\d{9,10}\-\d{9,10}\.indx
 #
-sub split_list(\@)
+sub split_list(@)
 {
     my ($list) = @_;	# get args
     my $status;		# subroutine return status
@@ -1685,7 +1707,7 @@ sub split_list(\@)
     # verify that we were given references to arrays
     #
     if (!defined $list || ref($list) ne 'ARRAY') {
-	&err_msg(39, "split_list: arg is not an array reference");
+	err_msg(39, "split_list: arg is not an array reference");
     }
 
     # truncate lists
@@ -1725,7 +1747,7 @@ sub split_list(\@)
 	# we should not get here
 	#
 	} else {
-	    &err_msg(40, "split_list: found bogus member of file list: $i");
+	    err_msg(40, "split_list: found bogus member of file list: $i");
 	}
     }
 
@@ -1738,7 +1760,7 @@ sub split_list(\@)
 # rm_cycles - split a list of files into single, double, gz and index files
 #
 # given:
-#	&rm_cycles(\@plain, \@double)
+#	rm_cycles(\@plain, \@double)
 #
 #	@plain		files of the form name\.\d{9,10}\-\d{9,10}
 #	@double		both @gz and @plain files
@@ -1748,7 +1770,7 @@ sub split_list(\@)
 # $cycle files because later on we will archive the current file and
 # form a new cycle.
 #
-sub rm_cycles(\@\@)
+sub rm_cycles(@@)
 {
     my ($plain, $double) = @_;		# get args
     my $indx;				# potential .indx file to remove
@@ -1758,7 +1780,7 @@ sub rm_cycles(\@\@)
     #
     if (!defined $plain || ref($plain) ne 'ARRAY' ||
         !defined $double || ref($double) ne 'ARRAY') {
-	&err_msg(41, "split_list: args are not an array references");
+	err_msg(41, "split_list: args are not an array references");
     }
 
     # Remove all but the oldest $cycle-1 files found in @$double
@@ -1768,12 +1790,12 @@ sub rm_cycles(\@\@)
 
 	# remove archived file
 	#
-	&rm($$double[$i], "keeping newest $cycle-1 cycles");
+	rm($$double[$i], "keeping newest $cycle-1 cycles");
 
 	# remove an associated index file if it exists
 	#
 	($indx = "$$double[$i].indx") =~ s/\.gz\.indx$/.indx/;
-	&rm($indx, "archive file was just removed") if -f $indx;
+	rm($indx, "archive file was just removed") if -f $indx;
     }
     splice @$double, 0, $i;
 
@@ -1792,7 +1814,7 @@ sub rm_cycles(\@\@)
 # clean_tstamp - prune away too many file.tstamp files
 #
 # usage:
-#	&clean_tstamp($file, \@single);
+#	clean_tstamp($file, \@single);
 #
 #	$file	path of the file being archived
 #	@single		files of the form name\.\d{9,10}
@@ -1803,7 +1825,7 @@ sub rm_cycles(\@\@)
 # all other file.tstamp files will be removed.  If no, then all but the
 # newest file.tstamp file will be removed.
 #
-sub clean_tstamp($\@)
+sub clean_tstamp($@)
 {
     my ($file, $list) = @_;		# get args
     my $f_dev;				# dev number of $file
@@ -1818,14 +1840,14 @@ sub clean_tstamp($\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(42, "clean_tstamp: 2nd argument is not an array reference");
+	err_msg(42, "clean_tstamp: 2nd argument is not an array reference");
     }
 
     # stat the file being archived
     #
     ($f_dev, $f_inum, undef, $f_links, undef) = stat($file);
     if (!defined $f_dev || !defined $f_inum || !defined $f_links) {
-	&err_msg(43, "clean_tstamp: failed to stat $file");
+	err_msg(43, "clean_tstamp: failed to stat $file");
     }
 
     # If the file is linked to another file, look to see if any
@@ -1870,9 +1892,9 @@ sub clean_tstamp($\@)
 	# remove tstamp file with an explanation
 	#
 	if ($f_links > 1) {
-	    &rm($i, "removing extra unlinked tstamp file");
+	    rm($i, "removing extra unlinked tstamp file");
     	} else {
-	    &rm($i, "removing older tstamp file");
+	    rm($i, "removing older tstamp file");
 	}
     }
 
@@ -1886,7 +1908,7 @@ sub clean_tstamp($\@)
 # gzip - gzip a file into the appropriate directory
 #
 # usage:
-#	&gzip($file, $inplace, $dir)
+#	gzip($file, $inplace, $dir)
 #
 #	$file		file to gzip
 #	$inplace	if true, gzip $file inplace in its current directory
@@ -1927,16 +1949,16 @@ sub gzip($$$)
 	# fork/exec gzip of the file
 	#
 	if (system("$gzip", "--best", "-f", "-q", "$file") != 0) {
-	    &warn_msg(44, "$gzip --best -f -q $file failed: $!");
+	    warn_msg(44, "$gzip --best -f -q $file failed: $!");
 	    return $false;
 	}
 	print "DEBUG: $gzip --best -f -q $file\n" if $verbose;
 
 	# chmod the archived file
 	#
-	$file = &untaint($file);
+	$file = untaint($file);
 	if (chmod($archive_mode, "$file.gz") != 1) {
-	    &warn_msg(45, "chmod 0%03o $file.gz failed", $archive_mode);
+	    warn_msg(45, "chmod 0%03o $file.gz failed", $archive_mode);
 	}
 	printf("DEBUG: chmod 0%03o $file.gz\n", $archive_mode) if $verbose;
 
@@ -1955,20 +1977,20 @@ sub gzip($$$)
 
 	# move file to the new directory
 	#
-	$file = &untaint($file);
-	$dir = &untaint($dir);
-	$base = &untaint($base);
+	$file = untaint($file);
+	$dir = untaint($dir);
+	$base = untaint($base);
 	if (copy("$file", "$dir/$base") != 1) {
-	    &warn_msg(46, "failed to cp $file $dir/$base: $!\n");
+	    warn_msg(46, "failed to cp $file $dir/$base: $!\n");
 	    return $false;
 	}
 	print "DEBUG: cp $file $dir/$base\n" if $verbose;
-	&rm("$file", "already moved file to $dir");
+	rm("$file", "already moved file to $dir");
 
 	# gzip the file in dir
 	#
 	if (system("$gzip", "--best", "-f", "-q", "$dir/$base") != 0) {
-	    &warn_msg(47, "$gzip --best -f -q $dir/$base failed: $!");
+	    warn_msg(47, "$gzip --best -f -q $dir/$base failed: $!");
 	    return $false;
 	}
 	print "DEBUG: $gzip --best -f -q $dir/$base\n" if $verbose;
@@ -1976,7 +1998,7 @@ sub gzip($$$)
 	# chmod the archived file
 	#
 	if (chmod($archive_mode, "$dir/$base.gz") != 1) {
-	    &warn_msg(48, "chmod 0%03o $dir/$base.gz failed",$archive_mode);
+	    warn_msg(48, "chmod 0%03o $dir/$base.gz failed",$archive_mode);
 	}
 	printf("DEBUG: chmod 0%03o $dir/$base.gz\n", $archive_mode) if $verbose;
     }
@@ -1987,7 +2009,7 @@ sub gzip($$$)
 # hard_link - ensure that a file is hardlinked to another
 #
 # usage:
-#	&hard_link($from, $to)
+#	hard_link($from, $to)
 #
 #	$from		hardlink this file
 #	$to		ensure that $to is a hardlink to $from
@@ -2009,7 +2031,7 @@ sub hard_link($$)
     ($f_dev, $f_inum, undef, $f_links) = stat($from);
     if (! -f $from ||
         !defined $f_dev || !defined $f_inum || !defined $f_links) {
-	&warn_msg(49, "hard_link: cannot stat or no such file: $from");
+	warn_msg(49, "hard_link: cannot stat or no such file: $from");
 	return $false;
     }
 
@@ -2030,14 +2052,14 @@ sub hard_link($$)
     #
     # untaint the name of $from and $to
     #
-    $from = &untaint($from);
-    $to = &untaint($to);
+    $from = untaint($from);
+    $to = untaint($to);
 
     # hardlink $from onto $to
     #
-    &rm($to, "removed prior to hard linking of $from") if -f $to;
+    rm($to, "removed prior to hard linking of $from") if -f $to;
     if (link($from, $to) <= 0) {
-	&warn_msg(50, "failed to hardlink $from onto $to");
+	warn_msg(50, "failed to hardlink $from onto $to");
 	return $false;
     }
     print "DEBUG: ln $from $to\n" if $verbose;
@@ -2048,7 +2070,7 @@ sub hard_link($$)
 # archive - archive a file
 #
 # usage:
-#	&archive($file, $dir, $gz_dir, $have_archive)
+#	archive($file, $dir, $gz_dir, $have_archive)
 #
 #	$file		path of prep file to archive
 #	$dir		prep directory of $file
@@ -2105,9 +2127,9 @@ sub archive($$$$)
 		print "chown $file_uid $file\n" if defined $file_uid;
 		print "chgrp $file_gid $file\n" if defined $file_gid;
 	    } else {
-		if (! &safe_file_create($file, $file_uid, $file_gid,
+		if (! safe_file_create($file, $file_uid, $file_gid,
 					$file_mode, $false, undef, undef)) {
-		    &warn_msg(51, "could not exclusively create $file");
+		    warn_msg(51, "could not exclusively create $file");
 		    return $false;
 		}
 	    }
@@ -2116,7 +2138,7 @@ sub archive($$$$)
 	# verify that the file still exists
 	#
 	if (! defined $opt_n && ! -f $file) {
-	    &warn_msg(52, "created $file and now it is missing");
+	    warn_msg(52, "created $file and now it is missing");
 	    return $false;
 	}
     }
@@ -2132,24 +2154,24 @@ sub archive($$$$)
 
     # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
-    if (! (($status, $list) = &scan_dir($file, $base, "$dir/$oldname",
+    if (! (($status, $list) = scan_dir($file, $base, "$dir/$oldname",
 					 "$dir/$oldname/archive")) ) {
-	&warn_msg(53, "failed to scan $dir/$oldname\n");
+	warn_msg(53, "failed to scan $dir/$oldname\n");
 	return $false;
     }
-    &clean_list($list);
-    if (! (($status,$single,$gz,$plain,$double,$indx) = &split_list($list)) ) {
-	&warn_msg(54, "splitlist failed on $file\'s dirs\n");
+    clean_list($list);
+    if (! (($status,$single,$gz,$plain,$double,$indx) = split_list($list)) ) {
+	warn_msg(54, "splitlist failed on $file\'s dirs\n");
 	return $false;
     }
     if ($cycle > 0 && scalar(@{$double}) >= $cycle) {
-	&rm_cycles($plain, $double);
+	rm_cycles($plain, $double);
     }
 
     # step 3 - deal with too many file.timestamp files
     #
     if (scalar(@{$single}) > 1) {
-	&clean_tstamp($file, $single);
+	clean_tstamp($file, $single);
     }
 
     # step 4 - gzip all file.tstamp1-tstamp2 files
@@ -2172,14 +2194,14 @@ sub archive($$$$)
 	    if (! $have_archive || $$plain[$i] =~ m#/archive/[^/]+$#) {
 
 		# gzip the file in place
-		&gzip($$plain[$i], $true, undef);
+		gzip($$plain[$i], $true, undef);
 
 	    # gzip the file into the archive dir
 	    #
 	    } else {
 
 		# gzip the file into the archive dir
-		&gzip($$plain[$i], $false, $gz_dir);
+		gzip($$plain[$i], $false, $gz_dir);
 	    }
 	}
     }
@@ -2191,8 +2213,8 @@ sub archive($$$$)
 	if (defined $opt_n) {
 	    print "ln -f $file $dir/$oldname/$base.$now\n";
 	} else {
-	    if (! &hard_link($file, "$dir/$oldname/$base.$now")) {
-		&warn_msg(55, "failed to hardlink $file onto %s",
+	    if (! hard_link($file, "$dir/$oldname/$base.$now")) {
+		warn_msg(55, "failed to hardlink $file onto %s",
 			  "$dir/$oldname/$base.$now");
 		return $false;
 	    }
@@ -2202,8 +2224,8 @@ sub archive($$$$)
 	if (defined $opt_n) {
 	    print "ln -f $file $$single[0]\n";
 	} else {
-	    if (! &hard_link($file, $$single[0])) {
-		&warn_msg(56, "failed to hardlink $file onto $$single[0]");
+	    if (! hard_link($file, $$single[0])) {
+		warn_msg(56, "failed to hardlink $file onto $$single[0]");
 		return $false;
 	    }
 	}
@@ -2224,11 +2246,11 @@ sub archive($$$$)
     } else {
 	if (-f "$dir/.$base.new") {
 	    print "DEBUG: removing $dir/.$base.new\n" if $verbose;
-	    &rm("$dir/.$base.new", "need filename for new version");
+	    rm("$dir/.$base.new", "need filename for new version");
 	}
-	if (! &safe_file_create($file, $file_uid, $file_gid, $file_mode,
+	if (! safe_file_create($file, $file_uid, $file_gid, $file_mode,
 				$true, $dir, $base)) {
-	    &warn_msg(57, "failed to safely create new $file");
+	    warn_msg(57, "failed to safely create new $file");
 	    return $false;
 	}
     }
@@ -2237,19 +2259,19 @@ sub archive($$$$)
     # step 8 - /a/path/OLD/file.tstamp renamed /a/path/OLD/file.tstamp-now
     #				    or /a/path/OLD/archive/file.tstamp-now
     #
-    $tstamp2 = &untaint("$$single[0]-$now");
-    $$single[0] = &untaint($$single[0]);
+    $tstamp2 = untaint("$$single[0]-$now");
+    $$single[0] = untaint($$single[0]);
     if (defined $opt_n) {
 	print "mv -f $$single[0] $tstamp2\n";
 	printf("chmod 0%03o $tstamp2\n", $archive_mode);
     } else {
     	if (!rename ($$single[0], $tstamp2)) {
-	    &warn_msg(58, "failed to rename $$single[0] to $tstamp2");
+	    warn_msg(58, "failed to rename $$single[0] to $tstamp2");
 	    return $false;
 	}
 	print "DEBUG: mv -f $$single[0] $tstamp2\n" if $verbose;
 	if (chmod($archive_mode, $tstamp2) != 1) {
-	    &warn_msg(59, "chmod 0%03o $tstamp2 failed", $archive_mode);
+	    warn_msg(59, "chmod 0%03o $tstamp2 failed", $archive_mode);
 	}
 	printf("DEBUG: chmod 0%03o $tstamp2\n", $archive_mode) if $verbose;
     }
@@ -2259,8 +2281,8 @@ sub archive($$$$)
     if (defined $opt_n) {
 	print "ln -f $file $dir/$oldname/$base.$now\n";
     } else {
-	if (! &hard_link($file, "$dir/$oldname/$base.$now")) {
-	    &warn_msg(60, "failed to hardlink $file onto %s",
+	if (! hard_link($file, "$dir/$oldname/$base.$now")) {
+	    warn_msg(60, "failed to hardlink $file onto %s",
 		      "$dir/$oldname/$base.$now");
 	    return $false;
 	}
@@ -2280,18 +2302,18 @@ sub archive($$$$)
 		    if $verbose;
 	    if (system("$indx_prog", "$$single[0]-$now",
 	    		"$$single[0]-$now.indx") != 0) {
-		&warm_msg(61, "$indx_prog $$single[0]-$now " .
+		warm_msg(61, "$indx_prog $$single[0]-$now " .
 			      "$$single[0]-$now.indx failed");
 	    }
 	    if (-f "$$single[0]-$now.indx") {
 		if (chmod($archive_mode, "$$single[0]-$now.indx") != 1) {
-		    &warn_msg(62, "chmod 0%03o $$single[0]-$now.indx failed",
+		    warn_msg(62, "chmod 0%03o $$single[0]-$now.indx failed",
 		    		  $archive_mode);
 		}
 		printf("DEBUG: chmod 0%03o $$single[0]-$now.indx\n",
 			$archive_mode) if $verbose;
 	    } else {
-		&warn_msg(63, "index file wasn't made: $$single[0]-$now.indx");
+		warn_msg(63, "index file wasn't made: $$single[0]-$now.indx");
 	    }
 	}
     }
@@ -2300,9 +2322,9 @@ sub archive($$$$)
     #
     if (defined $opt_1) {
 	if (! $have_archive) {
-	    &gzip($tstamp2, $true, undef);
+	    gzip($tstamp2, $true, undef);
 	} else {
-	    &gzip($tstamp2, $false, $gz_dir);
+	    gzip($tstamp2, $false, $gz_dir);
 	}
     }
 
