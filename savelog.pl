@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.4 $
-# @(#) $Id: savelog.pl,v 1.4 2000/01/21 16:21:05 chongo Exp chongo $
+# @(#) $Revision: 1.5 $
+# @(#) $Id: savelog.pl,v 1.5 2000/01/22 10:51:48 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -557,7 +557,7 @@ sub error($$@)
 # warning - report an problem and continue
 #
 # usage:
-#	&warning(exitcode, "error format" [,arg ...])
+#	&warning(exitcode, "warning format" [,arg ...])
 #
 # NOTE: Unlike
 #
@@ -731,13 +731,8 @@ sub parse()
 
     # -A archive_dir
     #
-    if (defined $opt_A) {
-	if (! -d $opt_A) {
-	    &error(14, "archive directory not found: $opt_A");
-	}
-	$archive_dir = $opt_A;
-	print "DEBUG: archive directory: $archive_dir\n" if $verbose;
-    }
+    $archive_dir = $opt_A;
+    print "DEBUG: archive directory: $archive_dir\n" if $verbose;
 
     # must have at least one arg
     #
@@ -872,7 +867,7 @@ sub prepfile($\$\$\$)
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	&warning(24, "%s is a directory and is not %s",
+	    	&warning(24, "%s is a directory and is not %s, skipping %s",
 			     "$oldname/archive", $archive_dir, $filename);
 	    	return 0;
 	    }
