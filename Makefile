@@ -2,8 +2,8 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.7 $
-# @(#) $Id: Makefile,v 1.7 2000/06/13 20:54:51 chongo Exp chongo $
+# @(#) $Revision: 1.8 $
+# @(#) $Id: Makefile,v 1.8 2000/06/14 07:52:09 chongo Exp root $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -44,6 +44,11 @@ INDX_PROG= mail
 TARGETS= savelog ${INDX_PROG}
 
 all: ${TARGETS}
+	@if ! perl -e 'require "syscall.ph"; 1;' 2>/dev/null; then \
+	    printf "\nmissing syscall.ph\n\n"; \
+	    printf "\ttry: cd /usr/include; h2ph -a -h syscall.h\n\n" 1>&2; \
+	    exit 1; \
+	fi
 
 install: all
 	${INSTALL} -m 0755 savelog ${DESTDIR}
