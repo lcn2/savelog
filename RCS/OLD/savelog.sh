@@ -99,7 +99,7 @@
 # common locations
 #
 PATH="/usr/sbin:/usr/ucb:/usr/bsd:/sbin:/usr/bin:/bin:/usr/etc:/usr/freeware/bin:/usr/gnu/bin:/usr/local/bin"
-COMP_FLAG="--best"
+COMP_FLAG="--best --force"
 DOT_Z=".gz"
 ECHO="/usr/bin/echo"
 CHOWN="/usr/bin/chown"
