@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 3.2 $
-# @(#) $Id: savelog.pl,v 3.2 2002/10/02 05:29:31 chongo Exp chongo $
+# @(#) $Revision: 3.3 $
+# @(#) $Id: savelog.pl,v 3.3 2002/10/02 07:28:16 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
@@ -845,7 +845,7 @@ sub parse()
     #
     $file_mode = oct($opt_m) if defined $opt_m;
     if ($file_mode != 0644 && $verbose) {
-	printf "DEBUG: using non-default file mode: 0%03o\n", $file_mode
+	printf "DEBUG: using non-default file mode: 0%04o\n", $file_mode
 		if $verbose;
     }
 
@@ -856,8 +856,6 @@ sub parse()
     #
     $archive_mode = oct($opt_M) if defined $opt_M;
     if ($archive_mode != 0444) {
-	printf("DEBUG: non-default archive mode: 0%03o\n", $archive_mode)
-		if $verbose;
     	$archdir_mode = 0700;
 	if (($archive_mode & 0060) != 0) {
 	    $archdir_mode |= (($archive_mode & 0060) | 0010);
@@ -865,11 +863,12 @@ sub parse()
 	if (($archive_mode & 0006) != 0) {
 	    $archdir_mode |= (($archive_mode & 0006) | 0001);
 	}
-	printf "DEBUG: non-default archive dir mode: 0%03o\n", $archdir_mode
-		if $verbose;
+	$archdir_mode |= 02000;
     } else {
     	$archdir_mode = 02755;
     }
+    printf("DEBUG: archive mode: 0%04o\n", $archive_mode) if $verbose;
+    printf("DEBUG: archive dir mode: 0%04o\n", $archdir_mode) if $verbose;
 
     # -o owner
     #
@@ -1085,10 +1084,10 @@ sub prep_file($)
     $mode &= 07777;
     if ($mode != $archdir_mode) {
 	if (chmod($archdir_mode, "$dir/$oldname") == 1) {
-	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
+	    printf("DEBUG: chmoded %s from 0%04o to 0%04o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
-	    warn_msg(24, "unable to chmod 0%03o OLD directory: %s",
+	    warn_msg(24, "unable to chmod 0%04o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
 	    return ($false, undef, undef);
 	}
@@ -1103,10 +1102,10 @@ sub prep_file($)
 	$mode &= 07777;
 	if ($mode != $archdir_mode) {
 	    if (chmod($archdir_mode, $gz_dir) == 1) {
-		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
+		printf("DEBUG: chmoded %s from 0%04o to 0%04o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
-		warn_msg(26, "unable to chmod 0%03o archive directory: %s",
+		warn_msg(26, "unable to chmod 0%04o archive directory: %s",
 		    $archdir_mode, $gz_dir);
 		return ($false, undef, undef);
 	    }
@@ -1161,7 +1160,7 @@ sub safe_file_create($$$$$$$)
 	    return $false;
 	}
 	close FILE;
-	printf("DEBUG: safely created %s with mode 0%03o\n", $file, $mode)
+	printf("DEBUG: safely created %s with mode 0%04o\n", $file, $mode)
 		if $verbose;
 	return $true;
 
@@ -1185,7 +1184,7 @@ sub safe_file_create($$$$$$$)
 	    print "DEBUG: couldn't create $newname\n" if $verbose;
 	    return $false;
 	}
-	printf("DEBUG: safely made %s, mode 0%03o\n", $newname, $mode)
+	printf("DEBUG: safely made %s, mode 0%04o\n", $newname, $mode)
 		if $verbose;
 
 	# move the file in place
@@ -1216,7 +1215,7 @@ sub safe_file_create($$$$$$$)
 	warn_msg(29, "cannot create $newname");
 	return $false;
     }
-    printf("DEBUG: safely formed %s with mode 0%03o\n", $newname, $mode)
+    printf("DEBUG: safely formed %s with mode 0%04o\n", $newname, $mode)
 	    if $verbose;
 
     # determine fchown args
@@ -1790,7 +1789,7 @@ sub gzip_or_move($$$$)
 	#
 	if (defined $opt_n) {
 	    print "$gzip_prog --best -f -q $file\n";
-	    printf("chmod 0%03o $file.gz\n", $archive_mode);
+	    printf("chmod 0%04o $file.gz\n", $archive_mode);
 	    return $true;
 	}
 
@@ -1805,9 +1804,9 @@ sub gzip_or_move($$$$)
 	# chmod the archived file
 	#
 	if (chmod($archive_mode, "$file.gz") != 1) {
-	    warn_msg(44, "chmod 0%03o $file.gz failed", $archive_mode);
+	    warn_msg(44, "chmod 0%04o $file.gz failed", $archive_mode);
 	}
-	printf("DEBUG: chmod 0%03o $file.gz\n", $archive_mode) if $verbose;
+	printf("DEBUG: chmod 0%04o $file.gz\n", $archive_mode) if $verbose;
 
     # gzip the file into $target
     #
@@ -1818,7 +1817,7 @@ sub gzip_or_move($$$$)
 	if (defined $opt_n) {
 	    print "/bin/mv -f $file $target/$base &&\n";
 	    print "$gzip_prog --best -f -q $target/$base\n";
-	    printf("chmod 0%03o $target/$base.gz\n", $archive_mode);
+	    printf("chmod 0%04o $target/$base.gz\n", $archive_mode);
 	    return $true;
 	}
 
@@ -1841,9 +1840,9 @@ sub gzip_or_move($$$$)
 	# chmod the archived file
 	#
 	if (chmod($archive_mode, "$target/$base.gz") != 1) {
-	    warn_msg(47, "chmod 0%03o $target/$base.gz failed",$archive_mode);
+	    warn_msg(47, "chmod 0%04o $target/$base.gz failed",$archive_mode);
 	}
-	printf("DEBUG: chmod 0%03o $target/$base.gz\n", $archive_mode)
+	printf("DEBUG: chmod 0%04o $target/$base.gz\n", $archive_mode)
 	    if $verbose;
 
     # move the file into $target
@@ -1854,7 +1853,7 @@ sub gzip_or_move($$$$)
 	#
 	if (defined $opt_n) {
 	    print "/bin/mv -f $file $target/$base &&\n";
-	    printf("chmod 0%03o $target/$base.gz\n", $archive_mode);
+	    printf("chmod 0%04o $target/$base.gz\n", $archive_mode);
 	    return $true;
 	}
 
@@ -1869,9 +1868,9 @@ sub gzip_or_move($$$$)
 	# chmod the moved file
 	#
 	if (chmod($archive_mode, "$target/$base") != 1) {
-	    warn_msg(49, "chmod 0%03o $target/$base failed",$archive_mode);
+	    warn_msg(49, "chmod 0%04o $target/$base failed",$archive_mode);
 	}
-	printf("DEBUG: chmod 0%03o $target/$base\n", $archive_mode)
+	printf("DEBUG: chmod 0%04o $target/$base\n", $archive_mode)
 	    if $verbose;
     }
     return $true;
@@ -2000,7 +1999,7 @@ sub archive($$$)
 	    #
 	    if (defined $opt_n) {
 		print ":> $file\n";
-		printf("chmod 0%03o $file\n", $file_mode);
+		printf("chmod 0%04o $file\n", $file_mode);
 		print "chown $file_uid $file\n" if defined $file_uid;
 		print "chgrp $file_gid $file\n" if defined $file_gid;
 	    } else {
@@ -2132,7 +2131,7 @@ sub archive($$$)
 	    print "rm -f $dir/.$base.new\n";
 	}
 	print ":> $dir/.$base.new\n";
-	printf("chmod 0%03o $dir/.$base.new\n", $file_mode);
+	printf("chmod 0%04o $dir/.$base.new\n", $file_mode);
 	print "mv -f $dir/.$base.new $file\n";
 	print "chown $file_uid $file\n" if defined $file_uid;
 	print "chgrp $file_gid $file\n" if defined $file_gid;
@@ -2157,7 +2156,7 @@ sub archive($$$)
     if (defined $opt_i) {
 	if ($opt_n) {
 	    print "$indx_prog $old_file\n";
-	    printf("chmod 0%03o last_tstamp\n", $archive_mode);
+	    printf("chmod 0%04o last_tstamp\n", $archive_mode);
 	} else {
 	    print "DEBUG: $indx_prog $old_file\n"
 		    if $verbose;
@@ -2168,10 +2167,10 @@ sub archive($$$)
 	    }
 	    if (-f "$old_file.indx") {
 		if (chmod($archive_mode, "$old_file.indx") != 1) {
-		    warn_msg(59, "chmod 0%03o $old_file.indx failed",
+		    warn_msg(59, "chmod 0%04o $old_file.indx failed",
 		    		  $archive_mode);
 		}
-		printf("DEBUG: chmod 0%03o $old_file.indx\n",
+		printf("DEBUG: chmod 0%04o $old_file.indx\n",
 			$archive_mode) if $verbose;
 	    } else {
 		warn_msg(60, "index file wasn't made: $old_file.indx");
