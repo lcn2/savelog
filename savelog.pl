@@ -375,12 +375,12 @@
 #		      /a/path/OLD/file.tstamp exist.
 #
 #	4) Gzip the all files of the form: /a/path/OLD/file.tstamp1-tstamp2
-#	   unless -t was given.   Files will be placed under /a/path/OLD or
-#	   /a/path/OLD/archive if it exists.  If -t was given, then
+#	   unless -1 was given.   Files will be placed under /a/path/OLD or
+#	   /a/path/OLD/archive if it exists.  If -1 was given, then
 #	   no files will be gziped.
 #
 #	   Assertion: At this point, all files of the form file.tstamp1-tstamp2
-#		      have been gziped, or -t was given and no additional files
+#		      have been gziped, or -1 was given and no additional files
 #		      were gziped.
 #
 #	5) If /a/path/OLD/file.tstamp is not hard linked to /a/path/file,
@@ -445,8 +445,10 @@ $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
 $ENV{IFS} = " \t\n";
 $ENV{SHELL} = "/bin/sh";
 delete $ENV{ENV};
+delete $ENV{GZIP};
 use Cwd;
 use File::Basename;
+use File::Copy;
 use IO::File;
 require 'syscall.ph';
 
@@ -465,16 +467,16 @@ my $oldname;		# name of the OLD directory
 my $archive_dir;	# where the archive symlink should point
 #
 my $exit_val;		# how we will exit
+my $gzip;		# location of the gzip program
 #
 my $true = 1;		# truth as we know it
 my $false = 0;		# genuine falseness
-#
 
 # directory cache
 #
-# $dir_cache[$dir_indx{$dir}] is an array of filenames found directly under $dir
+# $dir_cache[$dir_indx{$dir}] is an array of files found directly under $dir
 #
-my @dir_cache;		# $dir_cache[$dir_indx{$dir}] - array of filenames
+my @dir_cache;		# $dir_cache[$dir_indx{$dir}] - array of files
 my %dir_indx;		# @dir_cache index for $dir
 
 # setup
@@ -507,8 +509,8 @@ MAIN:
 {
     # my vars
     #
-    my $filename;	# the current file we are processing
-    my $dir;		# preped directory in which $filename resides
+    my $file;		# the current file we are processing
+    my $dir;		# preped directory in which $file resides
     my $gz_dir;		# where .gz files are to be placed
 
 $opt_n = 1;	# XXX - DEBUG
@@ -518,6 +520,19 @@ $opt_n = 1;	# XXX - DEBUG
     $exit_val = 0;	# hope for the best
     select STDOUT;
     $| = 1;
+    if (-x "/bin/gzip") {
+	$gzip = "/bin/gzip";
+    } elsif (-x "/usr/bin/gzip") {
+	$gzip = "/usr/bin/gzip";
+    } elsif (-x "/usr/local/bin/gzip") {
+	$gzip = "/usr/local/bin/gzip";
+    } elsif (-x "/usr/gnu/bin/gzip") {
+	$gzip = "/usr/gnu/bin/gzip";
+    } elsif (-x "/usr/freeware/bin/gzip") {
+	$gzip = "/usr/freeware/bin/gzip";
+    } else {
+	$gzip = "gzip";
+    }
 
     # parse args
     #
@@ -550,23 +565,23 @@ $opt_n = 1;	# XXX - DEBUG
 
     # process each file
     #
-    foreach $filename (@ARGV) {
+    foreach $file (@ARGV) {
 
 	# prepare to process the file
 	#
 	print "\n" if $verbose;
-	if (! &prepfile($filename, \$dir, \$gz_dir)) {
-	    print STDERR "error while preparing for $filename, skipping\n";
+	if (! &prepfile($file, \$dir, \$gz_dir)) {
+	    print STDERR "error while preparing for $file, skipping\n";
 	    next;
 	}
 
 	# archive the file
 	#
-	if (! &archive($filename, $dir, $gz_dir)) {
-	    print STDERR "error while processing $filename\n";
+	if (! &archive($file, $dir, $gz_dir)) {
+	    print STDERR "error while processing $file\n";
 	    next;
 	}
-	print "DEBUG: finished with $filename\n" if $verbose;
+	print "DEBUG: finished with $file\n" if $verbose;
     }
 
     # all done
@@ -815,10 +830,10 @@ sub parse()
 # prepfile - prepaire archive a file
 #
 # usage:
-#	&prepfile($filename, \$dir_p, \$gz_dir_p)
+#	&prepfile($file, \$dir_p, \$gz_dir_p)
 #
-#	$filename	path of preped filename to archive
-#	\$dir_p		ref to preped directory of $filename
+#	$file	path of preped file to archive
+#	\$dir_p		ref to preped directory of $file
 #	\$gz_dir_p	ref to where .gz files are to be placed
 #
 # returns:
@@ -829,27 +844,27 @@ sub prepfile($\$\$\$)
 {
     # my vars
     #
-    my ($filename, $dir_p, $gz_dir_p) = @_;	# parse args
-    my $dir;			# dirname of $filename (dir where file exists)
+    my ($file, $dir_p, $gz_dir_p) = @_;	# parse args
+    my $dir;			# dirname of $file (dir where file exists)
     my $gz_dir;			# directory where .gz files are kept
     my $mode;			# stated mode of a file or directory
     my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
 
-    # untaint the filename
+    # untaint the file
     #
-    if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
-    	$filename = $1;
+    if ($file =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+    	$file = $1;
     } else {
-	&warn_msg(16, "filename has dangerious chars: $filename");
+	&warn_msg(16, "file has dangerious chars: $file");
 	return $false;
     }
-    print "DEBUG: starting to process: $filename\n" if $verbose;
-    print "\n# starting to process: $filename\n" if defined $opt_n;
+    print "DEBUG: starting to process: $file\n" if $verbose;
+    print "\n# starting to process: $file\n" if defined $opt_n;
 
     # determine the file's directory
     #
-    $dir = dirname($filename);
-    print "DEBUG: $filename dir is: $dir\n" if $verbose;
+    $dir = dirname($file);
+    print "DEBUG: $file dir is: $dir\n" if $verbose;
 
     # make sure that the OLD directory exists
     #
@@ -1008,9 +1023,9 @@ sub prepfile($\$\$\$)
 # safe_file_create - safely create a file with the proper perm, uid and gid
 #
 # usage:
-#	&safe_file_create($filename, $uid, $gid, $mode)
+#	&safe_file_create($file, $uid, $gid, $mode)
 #
-#	$filename	- form $filename (may form $filename.new first)
+#	$file	- form $file (may form $file.new first)
 #	$uid		- force owner to be $uid (or -1 to not chown)
 #	$gid		- force group to be $gid (or -1 to not chgrp)
 #	$mode		- permissions / ownership
@@ -1022,10 +1037,10 @@ sub prepfile($\$\$\$)
 #
 sub safe_file_create($$$$$)
 {
-    my ($filename, $uid, $gid, $mode, $rename) = @_;	# get args
+    my ($file, $uid, $gid, $mode, $rename) = @_;	# get args
     my $uid_arg;	# $file_uid or -1
     my $gid_arg;	# $file_gid or -1
-    my $newname;	# $filename.new
+    my $newname;	# $file.new
     my $fd;		# file descriptor number of an open file
 
     # create directly if allowed and we do not need to chown or chgrp
@@ -1034,12 +1049,12 @@ sub safe_file_create($$$$$)
 
 	# create the file in place
 	#
-	if (! sysopen FILE, $filename, O_CREAT|O_RDONLY|O_EXCL, $mode) {
-	    print "DEBUG: could not create $filename\n" if $verbose;
+	if (! sysopen FILE, $file, O_CREAT|O_RDONLY|O_EXCL, $mode) {
+	    print "DEBUG: could not create $file\n" if $verbose;
 	    return $false;
 	}
 	close FILE;
-	printf("DEBUG: safely created %s with mode 0%03o\n", $filename, $mode)
+	printf("DEBUG: safely created %s with mode 0%03o\n", $file, $mode)
 	    if $verbose;
 	return $true;
 
@@ -1049,7 +1064,7 @@ sub safe_file_create($$$$$)
 
 	# create the file on the side
 	#
-	$newname = "$filename.new";
+	$newname = "$file.new";
 	if (! sysopen FILE, $newname, O_CREAT|O_RDONLY|O_EXCL, $mode) {
 	    print "DEBUG: couldn't create $newname\n" if $verbose;
 	    return $false;
@@ -1059,22 +1074,22 @@ sub safe_file_create($$$$$)
 
 	# move the file in place
 	#
-	if (! rename $newname, $filename) {
-	    print "DEBUG: couldn't mv $newname $filename\n" if $verbose;
+	if (! rename $newname, $file) {
+	    print "DEBUG: couldn't mv $newname $file\n" if $verbose;
 	    return $false;
 	}
-	print "DEBUG: moved $newname to $filename\n" if $verbose;
+	print "DEBUG: moved $newname to $file\n" if $verbose;
 	close FILE;
 	return $true;
     }
 
     # create the file on the side
     #
-    $newname = "$filename.new";
+    $newname = "$file.new";
     if ($newname =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	$newname = $1;
     } else {
-	print "DEBUG: filename.new has chars: $newname" if $verbose;
+	print "DEBUG: file.new has chars: $newname" if $verbose;
 	return $false;
     }
     if (! sysopen FILE, $newname, O_CREAT|O_RDONLY|O_EXCL, $mode) {
@@ -1109,23 +1124,23 @@ sub safe_file_create($$$$$)
 
     # move the file in place
     #
-    if (! rename $newname, $filename) {
-	print "DEBUG: cannot mv $newname $filename\n" if $verbose;
+    if (! rename $newname, $file) {
+	print "DEBUG: cannot mv $newname $file\n" if $verbose;
 	return $false;
     }
-    print "DEBUG: mv $newname $filename\n" if $verbose;
+    print "DEBUG: mv $newname $file\n" if $verbose;
     close FILE;
     return $true;
 }
 
 
-# loaddir - load a list with the filenames of files found in a directory
+# loaddir - load a list with the files of files found in a directory
 #
 # usage:
 #	&loaddir($dir, \@list)
 #
 #	$dir	directory to scan for files
-#	\@list	list of filenames of files found in $dir
+#	\@list	list of files of files found in $dir
 #
 # returns:
 #	0 ==> scan was unsuccessful
@@ -1136,7 +1151,7 @@ sub safe_file_create($$$$$)
 sub loaddir($\@)
 {
     my ($dir, $list) = @_;	# get args
-    my $filename;		# filename found in $dir
+    my $file;		# file found in $dir
     my $i;
 
     # verify that the list arg is an array reference
@@ -1145,7 +1160,7 @@ sub loaddir($\@)
 	&err_msg(31, "loaddir: 2nd argument is not an array reference");
     }
 
-    # if we found it in the cache, return the cached filenames
+    # if we found it in the cache, return the cached files
     #
     if (defined $dir_indx{$dir}) {
 	$#$list = -1;
@@ -1162,14 +1177,14 @@ sub loaddir($\@)
 	return $false;
     }
 
-    # scan dir for filenames
+    # scan dir for files
     #
     $#$list = -1;
-    while ($filename = readdir DIR) {
-	push(@$list, "$dir/$filename") if -f "$dir/$filename";
+    while ($file = readdir DIR) {
+	push(@$list, "$dir/$file") if -f "$dir/$file";
     }
 
-    # cache the list of filenames
+    # cache the list of files
     #
     $dir_indx{$dir} = @dir_cache;
     $dir_cache[@dir_cache] = [ @$list ];
@@ -1181,22 +1196,22 @@ sub loaddir($\@)
 }
 
 
-# scan_dir - scan the OLD and possibly archive dir for archived filenames
+# scan_dir - scan the OLD and possibly archive dir for archived files
 #
 # usage:
-#	&scan_dir($filename, $olddir, $archdir, \@filelist)
+#	&scan_dir($file, $olddir, $archdir, \@filelist)
 #
-#	$filename	archived filename to scan for in $olddir or $archdir
+#	$file	archived file to scan for in $olddir or $archdir
 #	$olddir		OLD directory name to scan in
 #	$archdir	if defined, name of OLD/archive to scan for
 #	\@filelist	list of files found
 #
-# We will look for filenames of the form:
+# We will look for files of the form:
 #
-#	filename\.\d{10}
-#	filename\.\d{10}\-\d{10}
-#	filename\.\d{10}\-\d{10}\.gz
-#	filename\.\d{10}\-\d{10}\.indx
+#	file\.\d{10}
+#	file\.\d{10}\-\d{10}
+#	file\.\d{10}\-\d{10}\.gz
+#	file\.\d{10}\-\d{10}\.indx
 #
 # directly under:
 #
@@ -1211,8 +1226,8 @@ sub loaddir($\@)
 #
 sub scan_dir($$$\@)
 {
-    my ($filename, $olddir, $archdir, $list) = @_;	# get args
-    my @filelist;	# filenames found under $dir
+    my ($file, $olddir, $archdir, $list) = @_;	# get args
+    my @filelist;	# files found under $dir
     my $i;
 
     # verify that the list arg is an array reference
@@ -1221,14 +1236,14 @@ sub scan_dir($$$\@)
 	&err_msg(31, "scan_dir: 4th argument is not an array reference");
     }
 
-    # scan OLD/ for files of the form filename\.\d{10}
+    # scan OLD/ for files of the form file\.\d{10}
     #
-    print "DEBUG: scanning $olddir for $filename tstamp files\n" if $verbose;
+    print "DEBUG: scanning $olddir for $file tstamp files\n" if $verbose;
     if (! &loaddir($olddir, \@filelist)) {
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
     }
-    @$list = sort grep m#/$filename\.\d{10}$#, @filelist;
+    @$list = sort grep m#/$file\.\d{10}$#, @filelist;
 
     # scan OLD/archive if it exists
     #
@@ -1236,25 +1251,25 @@ sub scan_dir($$$\@)
 
 	# scan the OLD/archive/
 	#
-	print "DEBUG: scanning $archdir for $filename files\n" if $verbose;
+	print "DEBUG: scanning $archdir for $file files\n" if $verbose;
 	if (! &loaddir($archdir, \@filelist)) {
 	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+	push(@$list, sort grep m#/$file\.\d{10}\-\d{10}$|/$file\.\d{10}\-\d{10}\.gz$|/$file\.\d{10}\-\d{10}\.indx$#, @filelist);
 
-    # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
+    # otherwise scan OLD for file\.\d{10}\-\d{10} and .gz and .indx files
     #
     } else {
 
 	# scan the OLD/ again
 	#
-	print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
+	print "DEBUG: scanning $olddir for $file files\n" if $verbose;
 	if (! &loaddir($olddir, \@filelist)) {
 	    &warn_msg(28, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+	push(@$list, sort grep m#/$file\.\d{10}\-\d{10}$|/$file\.\d{10}\-\d{10}\.gz$|/$file\.\d{10}\-\d{10}\.indx$#, @filelist);
     }
 }
 
@@ -1262,14 +1277,14 @@ sub scan_dir($$$\@)
 # rm - remove a file (or not if -n)
 #
 # usage:
-#	&rm($filename[, $reason]);
+#	&rm($file[, $reason]);
 #
-#	$filename	the file to remove
+#	$file		the file to remove
 #	$reason		the reason to remove, if defined
 #
 sub rm($$)
 {
-    my ($filename, $reason) = @_;	# get args
+    my ($file, $reason) = @_;	# get args
 
     # case: -n was given, only print action\
     #
@@ -1277,30 +1292,30 @@ sub rm($$)
 
 	# just print what we would have done
 	#
-	print "rm -f $filename\t# $reason\n";
+	print "rm -f $file\t# $reason\n";
 
     # case: attempt to remove the file
     #
     } else {
 
-	# untaint $filename
+	# untaint $file
 	#
-	if ($filename =~ m#^/# || $filename =~ m#^\.\.\/# ||
-	    $filename =~ m#^/\.\./"#) {
-	    &warn_msg(29, "unsafe filename to remove: $filename");
+	if ($file =~ m#^/# || $file =~ m#^\.\.\/# ||
+	    $file =~ m#^/\.\./"#) {
+	    &warn_msg(29, "unsafe file to remove: $file");
 	    return;
 	}
-	if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
-	    $filename = $1;
+	if ($file =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	    $file = $1;
 	}
 
 	# unlink
 	#
-	if (unlink $filename) {
-	    print "DEBUG: rm $filename\n" if $verbose;
+	if (unlink $file) {
+	    print "DEBUG: rm $file\n" if $verbose;
 
 	} else {
-	    &warn_msg(30, "cannot remove $filename\n");
+	    &warn_msg(30, "cannot remove $file\n");
 	}
     }
 }
@@ -1310,7 +1325,7 @@ sub rm($$)
 #
 #	&clean_list(\@list)
 #
-#	@list		list of archived files of $filename to be cleaned
+#	@list		list of archived files of $file to be cleaned
 #
 sub clean_list(\@)
 {
@@ -1409,24 +1424,24 @@ sub split_list(\@\@\@\@\@\@)
     #
     foreach $i (@$list) {
 
-	# record filename\.\d{10} files
+	# record file\.\d{10} files
 	#
 	if ($i =~ /\.\d{10}$/) {
 	    push(@$single, $i);
 
-	# record filename\.\d{10}\-\d{10}\.gz files (also as double files)
+	# record file\.\d{10}\-\d{10}\.gz files (also as double files)
 	#
 	} elsif ($i =~ /\.\d{10}\-\d{10}\.gz$/) {
 	    push(@$gz, $i);
 	    push(@$double, $i);
 
-	# record filename\.\d{10}\-\d{10} files (also as double files)
+	# record file\.\d{10}\-\d{10} files (also as double files)
 	#
 	} elsif ($i =~ /\.\d{10}\-\d{10}$/) {
 	    push(@$plain, $i);
 	    push(@$double, $i);
 
-	# record filename\.\d{10}\-\d{10}\.indx files
+	# record file\.\d{10}\-\d{10}\.indx files
 	#
 	} elsif ($i =~ /\.\d{10}\-\d{10}\.indx$/) {
 	    push(@$index, $i);
@@ -1500,9 +1515,9 @@ sub rm_cycles(\@\@\@\@\@)
 # clean_tstamp - prune away too many file.tstamp files
 #
 # usage:
-#	&clean_tstamp($filename, \@single);
+#	&clean_tstamp($file, \@single);
 #
-#	$filename	path of the file being archived
+#	$file	path of the file being archived
 #	@single		files of the form name\.\d{10}
 #
 # This function will perform actions as given in step 3 when more than
@@ -1513,10 +1528,10 @@ sub rm_cycles(\@\@\@\@\@)
 #
 sub clean_tstamp($\@)
 {
-    my ($filename, $list) = @_;		# get args
-    my $f_dev;				# dev number of $filename
-    my $f_inum;				# inode number of $filename
-    my $f_links;			# link count for $filename
+    my ($file, $list) = @_;		# get args
+    my $f_dev;				# dev number of $file
+    my $f_inum;				# inode number of $file
+    my $f_links;			# link count for $file
     my $t_dev;				# dev number of a file.tstamp file
     my $t_inum;				# inode number of a file.tstamp file
     my $t_links;			# link count for a file.tstamp file
@@ -1529,26 +1544,26 @@ sub clean_tstamp($\@)
 	&err_msg(36, "clean_tstamp: 2nd argument is not an array reference");
     }
 
-    # stat the filename being archived
+    # stat the file being archived
     #
-    ($f_dev, $f_inum, undef, $f_links, undef) = stat($filename);
+    ($f_dev, $f_inum, undef, $f_links, undef) = stat($file);
     if (!defined $f_dev || !defined $f_inum || !defined $f_links) {
-	&err_msg(37, "clean_tstamp: failed to stat $filename");
+	&err_msg(37, "clean_tstamp: failed to stat $file");
     }
 
-    # If the filename is linked to another file, look to see if any
+    # If the file is linked to another file, look to see if any
     # of the file.tstamps are that file
     #
     if ($f_links > 1) {
 
-	# look for a file.tstamp file linked to filename
+	# look for a file.tstamp file linked to file
 	for $i ( reverse @$list ) {
 	    ($t_dev, $t_inum, undef, $t_links, undef) = stat($i);
 	    if (defined $t_links && $f_links == $t_links &&
 	        defined $t_dev && $f_dev == $t_dev &&
 	        defined $t_inum && $f_inum == $t_inum) {
 		# found a linked file.tstamp file
-		print "DEBUG: $filename is linked to $i\n" if $verbose;
+		print "DEBUG: $file is linked to $i\n" if $verbose;
 		$keepname = $i;
 		last;
 	    }
@@ -1560,7 +1575,7 @@ sub clean_tstamp($\@)
 	    $keepname = $$list[$#$list];
 	}
 
-    # The filename is not linked to any file, keep the newest file.tstamp file
+    # The file is not linked to any file, keep the newest file.tstamp file
     #
     } else {
 	$keepname = $$list[$#$list];
@@ -1596,23 +1611,90 @@ sub clean_tstamp($\@)
 # usage:
 #	&gzip($file, $inplace, $dir)
 #
-#	$file		filename to gzip
+#	$file		file to gzip
 #	$inplace	if true, gzip $file inplace in its current directory
 #	$dir		if $inplace is false, gzip $file into this directory
+#
+# returns:
+#	0 ==> gzip was unsuccessful or was disabled (by -n or -1)
+#	1 ==> gzip was successful
+#
+# We gzip by running the gzip command in a child process.
 #
 sub gzip($$$)
 {
     my ($file, $inplace, $dir) = @_;	# get args
+    my $pid;				# gzip process id
+    my $basename;			# basename of file
+
+    # -1 blocks all gziping
+    #
+    if (defined $opt_1) {
+	print "DEBUG: gzip of $file skipped due to use of -1\n" if $verbose;
+	return $false;
+    }
+
+    # gzip file in place
+    #
+    if ($inplace) {
+
+	# do nothing if -n
+	#
+	if (defined $opt_n) {
+	    print "$gzip --best -f -q $file\n";
+	    return $false;
+	}
+
+	# fork/exec gzip of the file
+	#
+	if (system("$gzip", "--best", "-f", "-q", "$file") != 0) {
+	    &warn_msg(38, "$gzip --best -f -q $file failed: $!");
+	    return $false;
+	}
+	print "DEBUG: $gzip --best -f -q $file\n" if $verbose;
+
+    # gzip the file into $dir
+    #
+    } else {
+
+	# do nothing if -n
+	#
+	$basename = basename($file);
+	if (defined $opt_n) {
+	    print "/bin/mv -f $file $dir/$basename &&\n";
+	    print "$gzip --best -f -q $dir/$basename\n";
+	    return $false;
+	}
+
+	# move file to the new directory
+	#
+	if (copy("$file", "$dir/$basename") != 1) {
+	    &warn_msg(39, "failed to cp $file $dir/$basename: $!\n");
+	    return $false;
+	}
+	print "DEBUG: cp $file $dir/$basename\n" if $verbose;
+	&rm("$file", "already moved file to $dir");
+	print "DEBUG: rm -f $file\n" if $verbose;
+
+	# gzip the file in dir
+	#
+	if (system("$gzip", "--best", "-f", "-q", "$dir/$basename") != 0) {
+	    &warn_msg(40, "$gzip --best -f -q $dir/$basename failed: $!");
+	    return $false;
+	}
+	print "DEBUG: $gzip --best -f -q $dir/$basename\n" if $verbose;
+    }
+    return $true;
 }
 
 
 # archive - archive a file
 #
 # usage:
-#	&archive($filename, $dir, $gz_dir)
+#	&archive($file, $dir, $gz_dir)
 #
-#	$filename	path of preped filename to archive
-#	$dir		preped directory of $filename
+#	$file		path of preped file to archive
+#	$dir		preped directory of $file
 #	$gz_dir		where .gz files are to be placed
 #
 # returns:
@@ -1623,24 +1705,25 @@ sub gzip($$$)
 #
 sub archive($$$$)
 {
-    my ($filename, $dir, $gz_dir) = @_;	# get args
+    my ($file, $dir, $gz_dir) = @_;	# get args
     my @list;		# list of archived files
-    my @single;		# files of the form filename\.\d{10}
-    my @gz;		# files of the form filename\.\d{10}\-\d{10}\.gz
-    my @plain;		# files of the form filename\.\d{10}\-\d{10}
+    my @single;		# files of the form file\.\d{10}
+    my @gz;		# files of the form file\.\d{10}\-\d{10}\.gz
+    my @plain;		# files of the form file\.\d{10}\-\d{10}
     my @double;		# @gz and @plain files
-    my @indx;		# files of the form filename\.\d{10}\-\d{10}\.indx
+    my @indx;		# files of the form file\.\d{10}\-\d{10}\.indx
+    my $i;
 
     # step 0 - Determine if /a/path/file exists
     #
-    if (! -f $filename) {
+    if (! -f $file) {
 
 	# -T prevents us from touching missing files
 	#
 	if (defined $opt_T) {
 
-	    print "DEBUG: $filename missing and -T was given\n" if $verbose;
-	    print "DEBUG: nothing to do for $filename\n" if $verbose;
+	    print "DEBUG: $file missing and -T was given\n" if $verbose;
+	    print "DEBUG: nothing to do for $file\n" if $verbose;
 	    return $true;
 
 	# create file
@@ -1649,33 +1732,33 @@ sub archive($$$$)
 
 	    # create the file
 	    #
-	    if (! &safe_file_create($filename, $file_uid, $file_gid,
+	    if (! &safe_file_create($file, $file_uid, $file_gid,
 	    			    $file_mode, $false)) {
-	    	&warn_msg(100, "could not exclusively create $filename");
+	    	&warn_msg(100, "could not exclusively create $file");
 		return $false;
 	    }
 	}
 
 	# verfiy that the file still exists
 	#
-	if (! -f $filename) {
-	    &warn_msg(101, "created $filename and now it is missing");
+	if (! -f $file) {
+	    &warn_msg(101, "created $file and now it is missing");
 	    return $false;
 	}
     }
 
     # step 1 - Determine if /a/path/file is empty
     #
-    if (-z $filename && ! defined $opt_z) {
+    if (-z $file && ! defined $opt_z) {
 
-	print "DEBUG: $filename is empty and -z was not given\n" if $verbose;
-	print "DEBUG: nothing to do for $filename\n" if $verbose;
+	print "DEBUG: $file is empty and -z was not given\n" if $verbose;
+	print "DEBUG: nothing to do for $file\n" if $verbose;
 	return $true;
     }
 
     # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
-    &scan_dir($filename, "$dir/$oldname", "$dir/$oldname/archive", \@list);
+    &scan_dir($file, "$dir/$oldname", "$dir/$oldname/archive", \@list);
     &clean_list(\@list);
     &split_list(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     if ($cycle > 0 && $#double ge $cycle-1) {
@@ -1685,7 +1768,33 @@ sub archive($$$$)
     # step 3 - deal with too many file.timestamp files
     #
     if (scalar(@single) > 1) {
-	&clean_tstamp($filename, \@single);
+	&clean_tstamp($file, \@single);
+    }
+
+    # step 4 - gzip all file.tstamp1-tstamp2 files
+    #
+    if (scalar(@plain) > 0) {
+	
+	# gzip each plain file
+	#
+	for ($i = 0; $i <= $#plain; ++$i) {
+
+	    # gzip file in place
+	    #
+	    if (&gzip($plain[$i], $true, undef)) {
+	    	# move file from @plain to @gz
+		push(@gz, "$plain[$i].gz");
+		splice(@plain, $i, 1);
+		--$i;
+	    }
+	}
+
+	# fix up @gz and @double
+	#
+	@gz = sort @gz;
+	@double = @gz;
+	push(@double, @plain);
+	@double = sort @double;
     }
 
     # XXX - misc debug stuff
