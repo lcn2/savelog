@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.23 $
-# @(#) $Id: savelog.pl,v 1.23 2000/01/31 08:15:04 chongo Exp chongo $
+# @(#) $Revision: 1.24 $
+# @(#) $Id: savelog.pl,v 1.24 2000/01/31 10:19:03 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -1526,36 +1526,43 @@ sub split_list(\@\@\@\@\@\@)
 # rm_cycles - split a list of files into single, double, gz and index files
 #
 # given:
-#	&rm_cycles(\@single, \@gz, \@plain, \@double, \@index)
+#	&rm_cycles(\@plain, \@double)
+#@##	&rm_cycles(\@single, \@gz, \@plain, \@double, \@index)
 #
-#	@single		files of the form name\.\d{9,10}
-#	@gz		files of the form name\.\d{9,10}\-\d{9,10}\.gz
+#@##	@single		files of the form name\.\d{9,10}
+#@##	@gz		files of the form name\.\d{9,10}\-\d{9,10}\.gz
 #	@plain		files of the form name\.\d{9,10}\-\d{9,10}
 #	@double		both @gz and @plain files
-#	@index		files of the form name\.\d{9,10}\-\d{9,10}\.inedx
+#@##	@index		files of the form name\.\d{9,10}\-\d{9,10}\.inedx
 #
 # This function will all but the last $cycle-1 files found in \@double.
 # We remove all but the last (most recent) $cycle-1 files instead of
 # $cycle files because later on we will archive the current file and
 # form a new cycle.
+#@##
+#@## NOTE: The reason why the other arrays are passed in is so that \@list,
+#@##	\@gz and \@plain will have removed files removed from them as well.
 #
-# NOTE: The reason why the other arrays are passed in is so that \@list,
-#	\@gz and \@plain will have removed files removed from them as well.
-#
-sub rm_cycles(\@\@\@\@\@)
+#@#sub rm_cycles(\@\@\@\@\@)
+sub rm_cycles(\@\@)
 {
-    my ($single, $gz, $plain, $double, $index) = @_;	# get args
+#@#    my ($single, $gz, $plain, $double, $index) = @_;	# get args
+    my ($plain, $double) = @_;		# get args
     my $i;
 
     # verify that we were given references to arrays
     #
-    if (!defined $single || !defined $gz ||
-        !defined $plain || !defined $double || !defined $index ||
-	ref($single) ne 'ARRAY' ||
-	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
-	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
-	&err_msg(43, "split_list: arg(s) are not an array reference");
+    if (!defined $plain || ref($plain) ne 'ARRAY' ||
+        !defined $double || ref($double) ne 'ARRAY') {
+	&err_msg(43, "split_list: args are not an array references");
     }
+#@#    if (!defined $single || !defined $gz ||
+#@#        !defined $plain || !defined $double || !defined $index ||
+#@#	ref($single) ne 'ARRAY' ||
+#@#	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
+#@#	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
+#@#	&err_msg(43, "split_list: arg(s) are not an array reference");
+#@#    }
 
     # Remove all but the oldest $cycle-1 files found in @$double
     #
@@ -1565,17 +1572,19 @@ sub rm_cycles(\@\@\@\@\@)
     }
     splice @$double, 0, $i;
 
-    # rebuild @$gz and @$plain
-    #
-    $#$gz = -1;
+    # rebuild @$plain
+#@#    # rebuild @$gz and @$plain
+#@#    #
+#@#    $#$gz = -1;
     $#$plain = -1;
     for ($i=0; $i <= $#$double; ++$i) {
-	if ($$double[$i] =~ /\.gz$/) {
-	    push @$gz, $$double[$i];
-	} else {
-	    push @$plain, $$double[$i];
+	if ($$double[$i] !~ /\.gz$/) {
+	    push(@$plain, $$double[$i]);
+#@#	} else {
+#@#	    push(@$gz, $$double[$i]);
 	}
     }
+
     return;
 }
 
@@ -1695,10 +1704,10 @@ sub gzip($$$)
     my $pid;				# gzip process id
     my $base;				# basename of file
 
-    # -1 blocks all gziping
+    # -l blocks all gziping
     #
-    if (defined $opt_1) {
-	print "DEBUG: gzip of $file skipped due to use of -1\n" if $verbose;
+    if (defined $opt_l) {
+	print "DEBUG: gzip of $file skipped due to use of -l\n" if $verbose;
 	return $true;
     }
 
@@ -1876,6 +1885,7 @@ sub archive($$$$)
 	    #
 	    if (defined $opt_n) {
 		print ":> $file\n";
+		printf("chmod 0%03o $file\n", $file_mode);
 		print "chown $file_uid $file\n" if defined $file_uid;
 		print "chgrp $file_gid $file\n" if defined $file_gid;
 	    } else {
@@ -1910,7 +1920,8 @@ sub archive($$$$)
     &clean_list(\@list);
     &split_list(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     if ($cycle > 0 && $#double ge $cycle-1) {
-	&rm_cycles(\@single, \@gz, \@plain, \@double, \@indx);
+#@#	&rm_cycles(\@single, \@gz, \@plain, \@double, \@indx);
+	&rm_cycles(\@plain, \@double);
     }
 
     # step 3 - deal with too many file.timestamp files
@@ -1939,37 +1950,39 @@ sub archive($$$$)
 	    if (! $have_archive || $plain[$i] =~ m#/archive/[^/]+$#) {
 
 		# gzip the file in place
-		if (&gzip($plain[$i], $true, undef)) {
-		    # also move file from @plain to @gz
-		    push(@gz, "$plain[$i].gz");
-		    splice(@plain, $i, 1);
-		    --$i;
-		}
+		&gzip($plain[$i], $true, undef);
+#@#		if (&gzip($plain[$i], $true, undef)) {
+#@#		    # also move file from @plain to @gz
+#@#		    push(@gz, "$plain[$i].gz");
+#@#		    splice(@plain, $i, 1);
+#@#		    --$i;
+#@#		}
 
 	    # gzip the file into the arcive dir
 	    #
 	    } else {
-
-	    	my ($f, $d, $s);
+#@#
+#@#	    	my ($f, $d, $s);
 
 		# gzip the file into the archive dir
-		if (&gzip($plain[$i], $false, $gz_dir)) {
-		    # also move file from @plain to @gz
-		    ($f, $d, $s) = fileparse($plain[$i], '\.[a-zA-Z]+');
-		    push(@gz, "${d}archive/$f$s.gz");
-		    splice(@plain, $i, 1);
-		    --$i;
-		}
+		&gzip($plain[$i], $false, $gz_dir);
+#@#		if (&gzip($plain[$i], $false, $gz_dir)) {
+#@#		    # also move file from @plain to @gz
+#@#		    ($f, $d, $s) = fileparse($plain[$i], '\.[a-zA-Z]+');
+#@#		    push(@gz, "${d}archive/$f$s.gz");
+#@#		    splice(@plain, $i, 1);
+#@#		    --$i;
+#@#		}
 	    }
 	}
-
-	# fix up @gz and @double
-	#
-	@plain = sort tstamp_cmp @plain;
-	@gz = sort tstamp_cmp @gz;
-	@double = @gz;
-	push(@double, @plain);
-	@double = sort tstamp_cmp @double;
+#@#
+#@#	# fix up @gz and @double
+#@#	#
+#@#	@plain = sort tstamp_cmp @plain;
+#@#	@gz = sort tstamp_cmp @gz;
+#@#	@double = @gz;
+#@#	push(@double, @plain);
+#@#	@double = sort tstamp_cmp @double;
     }
 
     # step 5 - force file to be hardlinked to file.tstamp
@@ -2005,6 +2018,7 @@ sub archive($$$$)
 	    print "rm -f $dir/.$base.new\n";
 	}
 	print ":> $dir/.$base.new\n";
+	printf("chmod 0%03o $dir/.$base.new\n", $archive_mode);
 	print "mv -f $dir/.$base.new $file\n";
 	print "chown $file_uid $file\n" if defined $file_uid;
 	print "chgrp $file_gid $file\n" if defined $file_gid;
@@ -2045,6 +2059,22 @@ sub archive($$$$)
 	    &warn_msg(106, "failed to hardlink $file onto %s",
 		      "$dir/$oldname/$base.$now");
 	    return $false;
+	}
+    }
+
+    # step 10 - if -i then process the index files for the file.tstamp-now 
+    #
+    if (defined $opt_i) {
+	# XXX - perform index processing on $i to form $i.indx
+    }
+
+    # step 11 - If -1 was given, the gzip /a/path/OLD/file.tstamp-now
+    #
+    if (defined $opt_1) {
+	if (! $have_archive) {
+	    &gzip($i, $true, undef);
+	} else {
+	    &gzip($i, $false, $gz_dir);
 	}
     }
 
