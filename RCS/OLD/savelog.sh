@@ -277,7 +277,7 @@ while [ $# -gt 0 ]; do
 		else
 			newfile="$newname.1$DOT_Z"
 			$RM -f "$newname"
-			$GZIP $COMP_FLAG < "$newname.0" > "$newfile"
+			$GZIP $COMP_FLAG -c "$newname.0" > "$newfile"
 			$RM -f "$newname.0"
 		fi
 		if [ ! -z "$user" ]; then 
