@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.14 $
-# @(#) $Id: savelog.pl,v 1.14 2000/01/30 08:54:31 chongo Exp chongo $
+# @(#) $Revision: 1.16 $
+# @(#) $Id: savelog.pl,v 1.16 2000/01/30 09:58:06 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -376,7 +376,7 @@
 #
 #	4) Gzip the all files of the form: /a/path/OLD/file.tstamp1-tstamp2
 #	   unless -t was given.   Files will be placed under /a/path/OLD or
-#	   /a/path/OLD/archive if -A was given.  If -t was given, then
+#	   /a/path/OLD/archive if it exists.  If -t was given, then
 #	   no files will be gziped.
 #
 #	   Assertion: At this point, all files of the form file.tstamp1-tstamp2
@@ -425,7 +425,7 @@
 #		      -i was given.
 #
 #      12) If -1 was given, the gzip /a/path/OLD/file.tstamp-now.  Place the
-#	   result under /a/path/OLD or /a/path/OLD/archive if -A was given.
+#	   result under /a/path/OLD or /a/path/OLD/archive if it exists.
 #	   If -1 was not given, then we will ship this step.
 #
 #	   Assertion: The file /a/path/OLD/file.tstamp-now.gz exists and -1
@@ -509,7 +509,6 @@ MAIN:
     #
     my $filename;	# the current file we are processing
     my $dir;		# preped directory in which $filename resides
-    my $file;		# basename of $filename
     my $gz_dir;		# where .gz files are to be placed
 
 $opt_n = 1;	# XXX - DEBUG
@@ -556,14 +555,14 @@ $opt_n = 1;	# XXX - DEBUG
 	# prepare to process the file
 	#
 	print "\n" if $verbose;
-	if (! &prepfile($filename, \$dir, \$file, \$gz_dir)) {
+	if (! &prepfile($filename, \$dir, \$gz_dir)) {
 	    print STDERR "error while preparing for $filename, skipping\n";
 	    next;
 	}
 
 	# archive the file
 	#
-	if (! &archive($filename, $dir, $file, $gz_dir)) {
+	if (! &archive($filename, $dir, $gz_dir)) {
 	    print STDERR "error while processing $filename\n";
 	    next;
 	}
@@ -816,11 +815,10 @@ sub parse()
 # prepfile - prepaire archive a file
 #
 # usage:
-#	&prepfile($filename, \$dir_p, \$file_p, \$gz_dir_p)
+#	&prepfile($filename, \$dir_p, \$gz_dir_p)
 #
 #	$filename	path of preped filename to archive
 #	\$dir_p		ref to preped directory of $filename
-#	\$file_p	ref to basename of $filename
 #	\$gz_dir_p	ref to where .gz files are to be placed
 #
 # returns:
@@ -831,9 +829,8 @@ sub prepfile($\$\$\$)
 {
     # my vars
     #
-    my ($filename, $dir_p, $file_p, $gz_dir_p) = @_;	# parse args
+    my ($filename, $dir_p, $gz_dir_p) = @_;	# parse args
     my $dir;			# dirname of $filename (dir where file exists)
-    my $file;			# basename of $filename (file within $dir)
     my $gz_dir;			# directory where .gz files are kept
     my $mode;			# stated mode of a file or directory
     my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
@@ -1000,15 +997,9 @@ sub prepfile($\$\$\$)
 	}
     }
 
-    # ensure that the base filename exists
-    #
-    $file = basename($filename);
-    print "DEBUG: filename: $file\n" if $verbose;
-
     # return dir, file, gz_dir and success
     #
     $$dir_p = $dir;
-    $$file_p = $file;
     $$gz_dir_p = $gz_dir;
     return $true;
 }
@@ -1232,7 +1223,7 @@ sub scan_dir($$$\@)
 
     # scan OLD/ for files of the form filename\.\d{10}
     #
-    print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
+    print "DEBUG: scanning $olddir for $filename tstamp files\n" if $verbose;
     if (! &loaddir($olddir, \@filelist)) {
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
@@ -1600,14 +1591,28 @@ sub clean_tstamp($\@)
 }
 
 
+# gzip - gzip a file into the appropriate directory
+#
+# usage:
+#	&gzip($file, $inplace, $dir)
+#
+#	$file		filename to gzip
+#	$inplace	if true, gzip $file inplace in its current directory
+#	$dir		if $inplace is false, gzip $file into this directory
+#
+sub gzip($$$)
+{
+    my ($file, $inplace, $dir) = @_;	# get args
+}
+
+
 # archive - archive a file
 #
 # usage:
-#	&archive($filename, $dir, $file, $gz_dir)
+#	&archive($filename, $dir, $gz_dir)
 #
 #	$filename	path of preped filename to archive
 #	$dir		preped directory of $filename
-#	$file		basename of $filename
 #	$gz_dir		where .gz files are to be placed
 #
 # returns:
@@ -1618,7 +1623,7 @@ sub clean_tstamp($\@)
 #
 sub archive($$$$)
 {
-    my ($filename, $dir, $file, $gz_dir) = @_;	# get args
+    my ($filename, $dir, $gz_dir) = @_;	# get args
     my @list;		# list of archived files
     my @single;		# files of the form filename\.\d{10}
     my @gz;		# files of the form filename\.\d{10}\-\d{10}\.gz
@@ -1646,7 +1651,7 @@ sub archive($$$$)
 	    #
 	    if (! &safe_file_create($filename, $file_uid, $file_gid,
 	    			    $file_mode, $false)) {
-	    	&warn_msg(41, "could not exclusively create $filename");
+	    	&warn_msg(100, "could not exclusively create $filename");
 		return $false;
 	    }
 	}
@@ -1654,7 +1659,7 @@ sub archive($$$$)
 	# verfiy that the file still exists
 	#
 	if (! -f $filename) {
-	    &warn_msg(42, "created $filename and now it is missing");
+	    &warn_msg(101, "created $filename and now it is missing");
 	    return $false;
 	}
     }
