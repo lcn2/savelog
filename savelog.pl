@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.29 $
-# @(#) $Id: savelog,v 1.29 2000/02/05 09:12:59 chongo Exp chongo $
+# @(#) $Revision: 1.30 $
+# @(#) $Id: savelog,v 1.30 2000/02/05 21:39:58 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -543,12 +543,12 @@ $usage = "usage:\n" .
 	 "\t-o owner chown files to user (def: do not chown)\n" .
 	 "\t-g group chgrp files to group (def: do not chgrp)\n" .
 	 "\t-c count cycles of the file to keep, 0=>unlimited (def: 7)\n" .
-	 "\t-n\t gzip the most recent cycle now (def: wait 1 cycle)\n" .
 	 "\t-n\t do not do anything, just print cmds (def: do something)\n" .
 	 "\t-1\t gzip the new 1st cycle now (def: wait 1 cycle)\n" .
 	 "\t-z\t force the processing of empty files (def: don't)\n" .
 	 "\t-T\t do not create if missing\n" .
 	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
+	 "\t-v\t verbose output\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
 	 "\t-a OLD\t\t OLD directory name (not a path) (def: OLD)\n" .
