@@ -110,22 +110,22 @@ RM="/usr/bin/rm"
 EXPR="/usr/bin/expr"
 MKDIR="/usr/bin/mkdir"
 GETOPT="/usr/bin/getopt"
-if [ -x /usr/freeware/bin/gzip ]; then
-    GZIP="/usr/freeware/bin/gzip"
-elif [ -x /usr/sbin/gzip ]; then
-    GZIP="/usr/sbin/gzip"
+if [ -x /usr/sbin/gzip ]; then
+    GZIP_BINARY="/usr/sbin/gzip"
 elif [ -x /opt/FSFgzip/bin/gzip ]; then
-    GZIP="/opt/FSFgzip/bin/gzip"
+    GZIP_BINARY="/opt/FSFgzip/bin/gzip"
+elif [ -x /usr/freeware/bin/gzip ]; then
+    GZIP_BINARY="/usr/freeware/bin/gzip"
 elif [ -x /usr/local/bin/gzip ]; then
-    GZIP="/usr/local/bin/gzip"
+    GZIP_BINARY="/usr/local/bin/gzip"
 elif [ -x /usr/bin/gzip ]; then
-    GZIP="/usr/bin/gzip"
+    GZIP_BINARY="/usr/bin/gzip"
 elif [ -x /sbin/gzip ]; then
-    GZIP="/sbin/gzip"
+    GZIP_BINARY="/sbin/gzip"
 elif [ -x /bin/gzip ]; then
-    GZIP="/bin/gzip"
+    GZIP_BINARY="/bin/gzip"
 else
-    GZIP="/usr/gnu/bin/gzip"
+    GZIP_BINARY="/usr/gnu/bin/gzip"
 fi
 if [ -x /usr/bin/test ]; then
     TEST="/usr/bin/test"
@@ -133,7 +133,7 @@ else
     TEST="/bin/test"
 fi
 export PATH COMP_FLAG DOT_Z ECHO CHOWN CHGRP CHMOD MV RM EXPR MKDIR
-export GETOPT GZIP TEST
+export GETOPT GZIP_BINARY TEST
 
 # paranoid firewall
 #
@@ -141,8 +141,8 @@ if [ ! -x "$ECHO" ]; then
     echo "$prog: cannot find echo executable: $ECHO" 1>&2
     exit 1
 fi
-if [ ! -x "$GZIP" ]; then
-    $ECHO "$prog: cannot find gzip executable: $GZIP" 1>&2
+if [ ! -x "$GZIP_BINARY" ]; then
+    $ECHO "$prog: cannot find gzip executable: $GZIP_BINARY" 1>&2
     exit 2
 fi
 if [ ! -x "$CHOWN" ]; then
@@ -328,8 +328,8 @@ while [ $# -gt 0 ]; do
 	    $MV -f "$newname.0" "$newfile"
 	else
 	    newfile="$newname.1$DOT_Z"
-	    $RM -f "$newname"
-	    $GZIP $COMP_FLAG -c "$newname.0" > "$newfile"
+	    $RM -f "$newfile"
+	    $GZIP_BINARY $COMP_FLAG -c "$newname.0" > "$newfile"
 	    $RM -f "$newname.0"
 	fi
 	if [ ! -z "$user" ]; then
