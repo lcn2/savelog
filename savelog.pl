@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.22 $
-# @(#) $Id: savelog.pl,v 1.22 2000/01/31 07:54:34 chongo Exp chongo $
+# @(#) $Revision: 1.23 $
+# @(#) $Id: savelog.pl,v 1.23 2000/01/31 08:15:04 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -511,6 +511,7 @@ MAIN:
     my $file;		# the current file we are processing
     my $dir;		# preped directory in which $file resides
     my $gz_dir;		# where .gz files are to be placed
+    my $have_archive;	# TRUE => we have an OLD/archive dir
 
     # setup
     #
@@ -535,33 +536,6 @@ MAIN:
     #
     &parse();
 
-# $opt_n = 1;	# XXX - DEBUG
-
-# # XXX - debug
-# #
-# my (@list, @single, @gz, @plain, @double, @index);
-# &scan_dir("foo", "OLD", "OLD/archive", \@list);
-# print "scanned list\n", join("\n", @list), "\n";
-# &clean_list(\@list);
-# print "\ncleaned list:\n", join("\n", @list), "\n";
-# &split_list(\@list, \@single, \@gz, \@plain, \@double, \@index);
-# print "\nsingle list:\n", join("\n", @single), "\n";
-# print "\ngz list:\n", join("\n", @gz), "\n";
-# print "\nplain list:\n", join("\n", @plain), "\n";
-# print "\ndouble list:\n", join("\n", @double), "\n";
-# print "\nindex list:\n", join("\n", @index), "\n";
-# print "\ncycles: $cycle, double last: $#double\n";
-# if ($cycle > 0 && $#double ge $cycle-1) {
-# &rm_cycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
-# print "\nall list:\n", join("\n", @list), "\n";
-# print "\nsingle list:\n", join("\n", @single), "\n";
-# print "\ngz list:\n", join("\n", @gz), "\n";
-# print "\nplain list:\n", join("\n", @plain), "\n";
-# print "\ndouble list:\n", join("\n", @double), "\n";
-# print "\nindex list:\n", join("\n", @index), "\n";
-# }
-# exit(0);
-
     # process each file
     #
     foreach $file (@ARGV) {
@@ -569,14 +543,14 @@ MAIN:
 	# prepare to process the file
 	#
 	print "\n" if $verbose;
-	if (! &prepfile($file, \$dir, \$gz_dir)) {
+	if (! &prepfile($file, \$dir, \$gz_dir, \$have_archive)) {
 	    print STDERR "error while preparing for $file, skipping\n";
 	    next;
 	}
 
 	# archive the file
 	#
-	if (! &archive($file, $dir, $gz_dir)) {
+	if (! &archive($file, $dir, $gz_dir, $have_archive)) {
 	    print STDERR "error while processing $file\n";
 	    next;
 	}
@@ -853,11 +827,12 @@ sub untaint($)
 # prepfile - prepaire archive a file
 #
 # usage:
-#	&prepfile($file, \$dir_p, \$gz_dir_p)
+#	&prepfile($file, \$dir_p, \$gz_dir_p, \$have_archive_p);
 #
-#	$file	path of preped file to archive
-#	\$dir_p		ref to preped directory of $file
-#	\$gz_dir_p	ref to where .gz files are to be placed
+#	$file			path of preped file to archive
+#	\$dir_p			ref to preped directory of $file
+#	\$gz_dir_p		ref to where .gz files are to be placed
+#	\$have_archive_p	true => we have an OLD/archive
 #
 # returns:
 #	0 ==> prep was unsuccessful
@@ -867,7 +842,7 @@ sub prepfile($\$\$\$)
 {
     # my vars
     #
-    my ($file, $dir_p, $gz_dir_p) = @_;	# parse args
+    my ($file, $dir_p, $gz_dir_p, $have_archive_p) = @_;	# parse args
     my $dir;			# dirname of $file (dir where file exists)
     my $gz_dir;			# directory where .gz files are kept
     my $mode;			# stated mode of a file or directory
@@ -968,6 +943,7 @@ sub prepfile($\$\$\$)
 		   "$dir/$oldname/archive", $archive_dir) if $verbose;
 	}
 	$gz_dir = "$dir/$oldname/archive";
+	$$have_archive_p = $true;
 
     # If we were not asked to use an archive subdir of OLD but one
     # exists anyway, be sure it has the right mode and is writable
@@ -977,12 +953,14 @@ sub prepfile($\$\$\$)
 	# archive is a directory, so OLD/archive is the .gz directory
 	#
 	$gz_dir = "$dir/$oldname/archive";
+	$$have_archive_p = $true;
 
     } else {
 
 	# no archive directory, so OLD is the .gz directory
 	#
 	$gz_dir = "$dir/$oldname";
+	$$have_archive_p = $false;
     }
     print "DEBUG: .gz directory: $gz_dir\n" if $verbose;
 
@@ -1164,6 +1142,71 @@ sub safe_file_create($$$$$)
 }
 
 
+# tstamp_cmp - sort function to sort files by timestamp
+#
+# usage:
+#	@array = sort tstamp_cmp @array;
+#
+# returns:
+#	-1 ==> $a < $b
+#	 0 ==> $a == $b
+#	 1 ==> $a > $b
+#
+# Files are sorted in timestamp order.  The 1st timestamp (or the only
+# timestamp of the file only has one) is the primary order.  The 2nd
+# timestamp, if it exists, is the secondary order.
+#
+# A file with one timestamp is sorted before a file with two timestamps
+# where the 1st stamp is the same.
+#
+# A files timestamp(s) are sorted after a files without any timestamps.
+# Files without timestamps are sorted in cmp (string) order.  Files with
+# equivalent timestamps are sorted in cmp (string) order.
+#
+sub tstamp_cmp()
+{
+    my $a_base;		# basename of $a
+    my $a_t1 = -1;	# first timestamp for $a or -1
+    my $a_t2 = -1;	# second timestamp for $a or -1
+    my $b_base;		# basename of $b
+    my $b_t1 = -1;	# first timestamp for $b or -1
+    my $b_t2 = -1;	# second timestamp for $b or -1
+
+    # determine the timestamps of $a
+    #
+    ($a_base, undef, undef) = fileparse($a, '\.[a-zA-Z]+');
+    if ($a_base =~ m#\.(\d+)\-(\d+)$#) {
+	$a_t1 = $1;
+	$a_t2 = $2;
+    } elsif ($a_base =~ m#\.(\d+)$#) {
+	$a_t1 = $1;
+    }
+
+    # determine the timestamps of $b
+    #
+    ($b_base, undef, undef) = fileparse($b, '\.[a-zA-Z]+');
+    if ($b_base =~ m#\.(\d+)\-(\d+)$#) {
+	$b_t1 = $1;
+	$b_t2 = $2;
+    } elsif ($b_base =~ m#\.(\d+)$#) {
+	$b_t1 = $1;
+    }
+
+    # compare timestamps
+    #
+    if ($a_t1 < $b_t1) {
+	return -1;
+    } elsif ($a_t1 > $b_t1) {
+	return 1;
+    } elsif ($a_t2 < $b_t2) {
+	return -1;
+    } elsif ($a_t2 > $b_t2) {
+	return 1;
+    }
+    return $a <=> $b;
+}
+
+
 # loaddir - load a list with the files of files found in a directory
 #
 # usage:
@@ -1267,14 +1310,14 @@ sub scan_dir($$$$\@)
 	&err_msg(34, "scan_dir: 4th argument is not an array reference");
     }
 
-    # scan OLD/ for files of the form base\.\d{9,10}
+    # scan OLD/ for files of the form base\.\d{9,10} or base\.\d{9,10}\-\d{9,10}
     #
     print "DEBUG: scanning $olddir for $base tstamp files\n" if $verbose;
     if (! &loaddir($olddir, \@filelist)) {
 	&warn_msg(35, "unable to open OLD dir: $olddir");
 	return $false;
     }
-    @$list = sort grep m#/$base\.\d{9,10}$#, @filelist;
+    @$list = grep m#/$base\.\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}$#, @filelist;
 
     # scan OLD/archive if it exists
     #
@@ -1287,7 +1330,7 @@ sub scan_dir($$$$\@)
 	    &warn_msg(36, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
+	push(@$list, grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
 
     # otherwise scan OLD for base\.\d{9,10}\-\d{9,10} and .gz and .indx files
     #
@@ -1300,8 +1343,9 @@ sub scan_dir($$$$\@)
 	    &warn_msg(37, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
+	push(@$list, grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
     }
+    @$list = sort tstamp_cmp @$list;
 }
 
 
@@ -1640,8 +1684,8 @@ sub clean_tstamp($\@)
 #	$dir		if $inplace is false, gzip $file into this directory
 #
 # returns:
-#	0 ==> gzip was unsuccessful or was disabled (by -n or -1)
-#	1 ==> gzip was successful
+#	0 ==> gzip was unsuccessful 
+#	1 ==> gzip was successful or was disabled (by -n or -1)
 #
 # We gzip by running the gzip command in a child process.
 #
@@ -1655,7 +1699,7 @@ sub gzip($$$)
     #
     if (defined $opt_1) {
 	print "DEBUG: gzip of $file skipped due to use of -1\n" if $verbose;
-	return $false;
+	return $true;
     }
 
     # gzip file in place
@@ -1687,11 +1731,14 @@ sub gzip($$$)
 	if (defined $opt_n) {
 	    print "/bin/mv -f $file $dir/$base &&\n";
 	    print "$gzip --best -f -q $dir/$base\n";
-	    return $false;
+	    return $true;
 	}
 
 	# move file to the new directory
 	#
+	$file = &untaint($file);
+	$dir = &untaint($dir);
+	$base = &untaint($base);
 	if (copy("$file", "$dir/$base") != 1) {
 	    &warn_msg(47, "failed to cp $file $dir/$base: $!\n");
 	    return $false;
@@ -1744,10 +1791,8 @@ sub hard_link($$)
     # If the $to file does exist, see if it is a hardlink to $from.
     # We can ignore this if $from does not have enough links.
     #
-print "DEBUG: from stat: $f_dev, $f_inum, $f_links\n";
     if ($f_links > 1 && -f $to) {
         ($t_dev, $t_inum, undef, $t_links) = stat($to);
-print "DEBUG: to stat: $t_dev, $t_inum, $t_links\n";
 	if (defined $t_dev && $f_dev == $t_dev &&
 	    defined $t_inum && $f_inum == $t_inum &&
 	    defined $t_links && $f_links == $t_links) {
@@ -1779,11 +1824,12 @@ print "DEBUG: to stat: $t_dev, $t_inum, $t_links\n";
 # archive - archive a file
 #
 # usage:
-#	&archive($file, $dir, $gz_dir)
+#	&archive($file, $dir, $gz_dir, $have_archive)
 #
 #	$file		path of preped file to archive
 #	$dir		preped directory of $file
 #	$gz_dir		where .gz files are to be placed
+#	$have_archive	TRUE => we have an OLD/archive directory
 #
 # returns:
 #	0 ==> archive was unsuccessful
@@ -1793,7 +1839,7 @@ print "DEBUG: to stat: $t_dev, $t_inum, $t_links\n";
 #
 sub archive($$$$)
 {
-    my ($file, $dir, $gz_dir) = @_;	# get args
+    my ($file, $dir, $gz_dir, $have_archive) = @_;	# get args
     my @list;		# list of archived files
     my @single;		# files of the form file\.\d{9,10}
     my @gz;		# files of the form file\.\d{9,10}\-\d{9,10}\.gz
@@ -1803,6 +1849,7 @@ sub archive($$$$)
     my $base;		# basename of file
     my $now;		# seconds since the epoch of now
     my $i;
+    my $j;
 
     # prep work
     #
@@ -1829,6 +1876,8 @@ sub archive($$$$)
 	    #
 	    if (defined $opt_n) {
 		print ":> $file\n";
+		print "chown $file_uid $file\n" if defined $file_uid;
+		print "chgrp $file_gid $file\n" if defined $file_gid;
 	    } else {
 		if (! &safe_file_create($file, $file_uid, $file_gid,
 					$file_mode, $false, undef, undef)) {
@@ -1876,24 +1925,51 @@ sub archive($$$$)
 	
 	# gzip each plain file
 	#
+	# If we have an archive dir, all plain files in the archive dir
+	# will be gziped in place.   However plain files directly under
+	# the OLD dir will be gziped into the archive directory.
+	#
+	# If we do not have an archive dir, all plain files will be
+	# gziped in place.
+	#
 	for ($i = 0; $i <= $#plain; ++$i) {
 
-	    # gzip file in place
+	    # gzip files in place
 	    #
-	    if (&gzip($plain[$i], $true, undef)) {
-	    	# move file from @plain to @gz
-		push(@gz, "$plain[$i].gz");
-		splice(@plain, $i, 1);
-		--$i;
+	    if (! $have_archive || $plain[$i] =~ m#/archive/[^/]+$#) {
+
+		# gzip the file in place
+		if (&gzip($plain[$i], $true, undef)) {
+		    # also move file from @plain to @gz
+		    push(@gz, "$plain[$i].gz");
+		    splice(@plain, $i, 1);
+		    --$i;
+		}
+
+	    # gzip the file into the arcive dir
+	    #
+	    } else {
+
+	    	my ($f, $d, $s);
+
+		# gzip the file into the archive dir
+		if (&gzip($plain[$i], $false, $gz_dir)) {
+		    # also move file from @plain to @gz
+		    ($f, $d, $s) = fileparse($plain[$i], '\.[a-zA-Z]+');
+		    push(@gz, "${d}archive/$f$s.gz");
+		    splice(@plain, $i, 1);
+		    --$i;
+		}
 	    }
 	}
 
 	# fix up @gz and @double
 	#
-	@gz = sort @gz;
+	@plain = sort tstamp_cmp @plain;
+	@gz = sort tstamp_cmp @gz;
 	@double = @gz;
 	push(@double, @plain);
-	@double = sort @double;
+	@double = sort tstamp_cmp @double;
     }
 
     # step 5 - force file to be hardlinked to file.tstamp
@@ -1930,6 +2006,8 @@ sub archive($$$$)
 	}
 	print ":> $dir/.$base.new\n";
 	print "mv -f $dir/.$base.new $file\n";
+	print "chown $file_uid $file\n" if defined $file_uid;
+	print "chgrp $file_gid $file\n" if defined $file_gid;
     } else {
 	if (-f "$dir/.$base.new") {
 	    print "DEBUG: removing $dir/.$base.new\n" if $verbose;
@@ -1943,7 +2021,8 @@ sub archive($$$$)
     }
     print "DEBUG: created new $file\n" if $verbose;
 
-    # step 8 - /a/path/OLD/file.tstamp renamed /a/path/file.tstamp-now
+    # step 8 - /a/path/OLD/file.tstamp renamed /a/path/OLD/file.tstamp-now
+    #				    or /a/path/OLD/archive/file.tstamp-now
     #
     $i = &untaint("$single[0]-$now");
     $single[0] = &untaint($single[0]);
