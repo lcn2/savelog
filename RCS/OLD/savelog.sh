@@ -76,7 +76,7 @@
 #	5) The new OLD/file.0 is chanegd subject to the -m, -o and -g flags.
 #
 # Note: If the OLD sub-directory does not exist, it will be created 
-#       with mode 0755.
+#	with mode 0755.
 #
 # Note: For backward compatibility, -u user means the same as -o user.
 #
@@ -84,32 +84,49 @@
 #	not created.
 #
 # Note: Since the version numbers start with 0, version number <cycle>
-#       is never formed.  The <cycle> count must be at least 2.
+#	is never formed.  The <cycle> count must be at least 2.
 #
 # Note: The default compression extension is .gz instead of .z.
 #
-# Note: This utility will not refuse to process symlinks in addition
-#	to other non-file/special-files.
+# Note: This utility will refuse to process symlinks in addition
+#	to other non-file/special-files.  So the target must be
+#	a regular file.
 #
 # Bugs: If a process is still writing to the file.0 and savelog
 #	moved it to file.1 and compresses it, data could be lost.
 
 # common locations
 #
-PATH="/usr/sbin:/usr/bsd:/sbin:/usr/bin:/bin:/usr/etc:/usr/freeware/bin:/usr/gnu/bin:/usr/local/bin"
-ECHO="/sbin/echo"
-GZIP="/usr/sbin/gzip"
+PATH="/usr/sbin:/usr/ucb:/usr/bsd:/sbin:/usr/bin:/bin:/usr/etc:/usr/freeware/bin:/usr/gnu/bin:/usr/local/bin"
 COMP_FLAG="--best"
 DOT_Z=".gz"
-CHOWN="/sbin/chown"
-CHGRP="/sbin/chgrp"
-CHMOD="/sbin/chmod"
-TOUCH="/sbin/touch"
-MV="/sbin/mv"
-RM="/sbin/rm"
-EXPR="/sbin/expr"
-MKDIR="/sbin/mkdir"
+ECHO="/usr/bin/echo"
+CHOWN="/usr/bin/chown"
+CHGRP="/usr/bin/chgrp"
+CHMOD="/usr/bin/chmod"
+TOUCH="/usr/bin/touch"
+MV="/usr/bin/mv"
+RM="/usr/bin/rm"
+EXPR="/usr/bin/expr"
+MKDIR="/usr/bin/mkdir"
 GETOPT="/usr/bin/getopt"
+if [ -x /usr/sbin/gzip ]; then
+    GZIP="/usr/sbin/gzip"
+elif [ -x /opt/FSFgzip/bin/gzip ]; then
+    GZIP="/opt/FSFgzip/bin/gzip"
+elif [ -x /usr/freeware/bin/gzip ]; then
+    GZIP="/usr/freeware/bin/gzip"
+elif [ -x /usr/local/bin/gzip ]; then
+    GZIP="/usr/local/bin/gzip"
+elif [ -x /usr/bin/gzip ]; then
+    GZIP="/usr/bin/gzip"
+elif [ -x /sbin/gzip ]; then
+    GZIP="/sbin/gzip"
+elif [ -x /bin/gzip ]; then
+    GZIP="/bin/gzip"
+else
+    GZIP="/usr/gnu/bin/gzip"
+fi
 
 # paranoid firewall
 #
@@ -203,7 +220,7 @@ while [ $# -gt 0 ]; do
 		exitcode=13
 		continue
 	fi
-	if [ -l "$filename" ]; then
+	if [ -L "$filename" ]; then
 		$ECHO "$prog: $filename is symlink" 1>&2
 		exitcode=14
 		continue
