@@ -99,43 +99,43 @@ GETOPT="/usr/bin/getopt"
 # paranoid firewall
 #
 if [ ! -x "$ECHO" ]; then
-	echo "$prog: cannot file echo executable: $ECHO" 1>&2
+	echo "$prog: cannot find echo executable: $ECHO" 1>&2
 	exit 1
 fi
 if [ ! -x "$GZIP" ]; then
-	$ECHO "$prog: cannot file gzip executable: $GZIP" 1>&2
+	$ECHO "$prog: cannot find gzip executable: $GZIP" 1>&2
 	exit 2
 fi
 if [ ! -x "$CHOWN" ]; then
-	$ECHO "$prog: cannot file chown executable: $CHOWN" 1>&2
+	$ECHO "$prog: cannot find chown executable: $CHOWN" 1>&2
 	exit 3
 fi
 if [ ! -x "$CHGRP" ]; then
-	$ECHO "$prog: cannot file chgrp executable: $CHGRP" 1>&2
+	$ECHO "$prog: cannot find chgrp executable: $CHGRP" 1>&2
 	exit 4
 fi
 if [ ! -x "$TOUCH" ]; then
-	$ECHO "$prog: cannot file touch executable: $TOUCH" 1>&2
+	$ECHO "$prog: cannot find touch executable: $TOUCH" 1>&2
 	exit 5
 fi
 if [ ! -x "$MV" ]; then
-	$ECHO "$prog: cannot file mv executable: $MV" 1>&2
+	$ECHO "$prog: cannot find mv executable: $MV" 1>&2
 	exit 6
 fi
 if [ ! -x "$RM" ]; then
-	$ECHO "$prog: cannot file rm executable: $RM" 1>&2
+	$ECHO "$prog: cannot find rm executable: $RM" 1>&2
 	exit 7
 fi
 if [ ! -x "$EXPR" ]; then
-	$ECHO "$prog: cannot file expr executable: $EXPR" 1>&2
+	$ECHO "$prog: cannot find expr executable: $EXPR" 1>&2
 	exit 8
 fi
 if [ ! -x "$MKDIR" ]; then
-	$ECHO "$prog: cannot file mkdir executable: $MKDIR" 1>&2
+	$ECHO "$prog: cannot find mkdir executable: $MKDIR" 1>&2
 	exit 9
 fi
 if [ ! -x "$GETOPT" ]; then
-	$ECHO "$prog: cannot file getopt executable: $GETOPT" 1>&2
+	$ECHO "$prog: cannot find getopt executable: $GETOPT" 1>&2
 	exit 10
 fi
 
