@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.20 $
-# @(#) $Id: savelog.pl,v 1.20 2000/01/31 07:26:48 chongo Exp chongo $
+# @(#) $Revision: 1.21 $
+# @(#) $Id: savelog.pl,v 1.21 2000/01/31 07:43:37 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -1724,10 +1724,10 @@ sub gzip($$$)
 }
 
 
-# hardlink - ensure that a file is hardlinked to another
+# hard_link - ensure that a file is hardlinked to another
 #
 # usage:
-#	&hardlink($from, $to)
+#	&hard_link($from, $to)
 #
 #	$from		hardlink this file
 #	$to		ensure that $to is a hardlink to $from
@@ -1736,7 +1736,9 @@ sub gzip($$$)
 #	0 ==> archive was unsuccessful
 #	1 ==> archive was successful or ignored
 #
-sub hardlink($$)
+# NOTE: This function ignores $opt_n.
+#
+sub hard_link($$)
 {
     my ($from, $to) = @_;	# get args
     my ($f_dev, $f_inum, $f_links);	# $from stat information
@@ -1747,7 +1749,7 @@ sub hardlink($$)
     ($f_dev, $f_inum, undef, $f_links) = stat($from);
     if (! -f $from ||
         !defined $f_dev || !defined $f_inum || !defined $f_links) {
-	&warn_msg(54, "hardlink: cannot stat or no such file: $from");
+	&warn_msg(54, "hard_link: cannot stat or no such file: $from");
 	return $false;
     }
 
@@ -1768,36 +1770,30 @@ print "DEBUG: to stat: $t_dev, $t_inum, $t_links\n";
 
     # force $to to be a hardlink of $from
     #
-    if (! defined $opt_n) {
-
-	# untaint the name of $from and $to
-	#
-	if ($from =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
-	    $from = $1;
-	} else {
-	    &warn_msg(55, "hardlink `from' file has dangerious chars: $from");
-	    return $false;
-	}
-	if ($to =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
-	    $to = $1;
-	} else {
-	    &warn_msg(56, "hardlink `to' file has dangerious chars: $to");
-	    return $false;
-	}
-
-	# hardlink $from onto $to
-	#
-	unlink $to if -f $to;
-	print "DEBUG: removed $to prior to hard linking\n" if $verbose;
-	if (link($from, $to) <= 0) {
-	    &warn_msg(57, "failed to hardlink $from onto $to");
-	    return $false;
-	}
-	print "DEBUG: hardlinked $from onto $to\n" if $verbose;
-
+    # untaint the name of $from and $to
+    #
+    if ($from =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	$from = $1;
     } else {
-	print "ln -f $from $to\n";
+	&warn_msg(55, "hardlink `from' file has dangerious chars: $from");
+	return $false;
     }
+    if ($to =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	$to = $1;
+    } else {
+	&warn_msg(56, "hardlink `to' file has dangerious chars: $to");
+	return $false;
+    }
+
+    # hardlink $from onto $to
+    #
+    unlink $to if -f $to;
+    print "DEBUG: removed $to prior to hard linking\n" if $verbose;
+    if (link($from, $to) <= 0) {
+	&warn_msg(57, "failed to hardlink $from onto $to");
+	return $false;
+    }
+    print "DEBUG: hardlinked $from onto $to\n" if $verbose;
     return $true;
 }
 
@@ -1926,16 +1922,24 @@ sub archive($$$$)
     #
     if (scalar(@single) < 1) {
 	print "DEBUG: no file.tstamp file, forming for $base\n" if $verbose;
-	if (! &hardlink($file, "$dir/$oldname/$base.$now")) {
-	    &warn_msg(102, "failed to hardlink $file onto %s",
-	    	      "$dir/$oldname/$base.$now");
-	    return $false;
+	if (defined $opt_n) {
+	    print "ln -f $file $dir/$oldname/$base.$now\n";
+	} else {
+	    if (! &hard_link($file, "$dir/$oldname/$base.$now")) {
+		&warn_msg(102, "failed to hardlink $file onto %s",
+			  "$dir/$oldname/$base.$now");
+		return $false;
+	    }
 	}
 	push(@single, "$dir/$oldname/$base.$now");
     } else {
-	if (! &hardlink($file, $single[0])) {
-	    &warn_msg(103, "failed to hardlink $file onto $single[0]");
-	    return $false;
+	if (defined $opt_n) {
+	    print "ln -f $file $single[0]\n";
+	} else {
+	    if (! &hard_link($file, $single[0])) {
+		&warn_msg(103, "failed to hardlink $file onto $single[0]");
+		return $false;
+	    }
 	}
     }
 
@@ -1972,7 +1976,7 @@ sub archive($$$$)
 
     # step 8 - /a/path/OLD/file.tstamp renamed /a/path/file.tstamp-now
     #
-    $i = "$single[0]-" . time();
+    $i = "$single[0]-$now";
     if ($i =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	$i = $1;
     } else {
@@ -1993,6 +1997,18 @@ sub archive($$$$)
 	    return $false;
 	}
 	print "DEBUG: renamed $single[0] to $i\n" if $verbose;
+    }
+
+    # step 9 - The file /a/path/file is hardlinked to /a/path/OLD/file.now
+    #
+    if (defined $opt_n) {
+	print "ln -f $file $dir/$oldname/$base.$now\n";
+    } else {
+	if (! &hard_link($file, "$dir/$oldname/$base.$now")) {
+	    &warn_msg(102, "failed to hardlink $file onto %s",
+		      "$dir/$oldname/$base.$now");
+	    return $false;
+	}
     }
 
     # all done
