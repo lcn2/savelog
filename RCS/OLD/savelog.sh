@@ -110,12 +110,12 @@ RM="/usr/bin/rm"
 EXPR="/usr/bin/expr"
 MKDIR="/usr/bin/mkdir"
 GETOPT="/usr/bin/getopt"
-if [ -x /usr/sbin/gzip ]; then
+if [ -x /usr/freeware/bin/gzip ]; then
+    GZIP="/usr/freeware/bin/gzip"
+elif [ -x /usr/sbin/gzip ]; then
     GZIP="/usr/sbin/gzip"
 elif [ -x /opt/FSFgzip/bin/gzip ]; then
     GZIP="/opt/FSFgzip/bin/gzip"
-elif [ -x /usr/freeware/bin/gzip ]; then
-    GZIP="/usr/freeware/bin/gzip"
 elif [ -x /usr/local/bin/gzip ]; then
     GZIP="/usr/local/bin/gzip"
 elif [ -x /usr/bin/gzip ]; then
