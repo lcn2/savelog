@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.11 $
-# @(#) $Id: savelog.pl,v 1.11 2000/01/28 20:02:45 chongo Exp chongo $
+# @(#) $Revision: 1.12 $
+# @(#) $Id: savelog.pl,v 1.12 2000/01/30 05:49:32 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -465,7 +465,6 @@ my $oldname;		# name of the OLD directory
 my $archive_dir;	# where the archive symlink should point
 #
 my $exit_val;		# how we will exit
-my $cwd;		# initial current working directory
 #
 my $true = 1;		# truth as we know it
 my $false = 0;		# genuine falseness
@@ -511,36 +510,35 @@ $opt_n = 1;	# XXX - DEBUG
     # setup
     #
     $exit_val = 0;	# hope for the best
-    $cwd = cwd();
 
     # parse args
     #
     &parse();
 
-# XXX - debug
-#
-my (@list, @single, @gz, @plain, @double, @index);
-&scandir("foo", "OLD", "OLD/archive", \@list);
-print "scanned list\n", join("\n", @list), "\n";
-&cleanlist(\@list);
-print "\ncleaned list:\n", join("\n", @list), "\n";
-&splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
-print "\nsingle list:\n", join("\n", @single), "\n";
-print "\ngz list:\n", join("\n", @gz), "\n";
-print "\nplain list:\n", join("\n", @plain), "\n";
-print "\ndouble list:\n", join("\n", @double), "\n";
-print "\nindex list:\n", join("\n", @index), "\n";
-print "\ncycles: $cycle, double last: $#double\n";
-if ($cycle > 0 && $#double ge $cycle-1) {
-&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
-print "\nall list:\n", join("\n", @list), "\n";
-print "\nsingle list:\n", join("\n", @single), "\n";
-print "\ngz list:\n", join("\n", @gz), "\n";
-print "\nplain list:\n", join("\n", @plain), "\n";
-print "\ndouble list:\n", join("\n", @double), "\n";
-print "\nindex list:\n", join("\n", @index), "\n";
-}
-exit(0);
+# # XXX - debug
+# #
+# my (@list, @single, @gz, @plain, @double, @index);
+# &scandir("foo", "OLD", "OLD/archive", \@list);
+# print "scanned list\n", join("\n", @list), "\n";
+# &cleanlist(\@list);
+# print "\ncleaned list:\n", join("\n", @list), "\n";
+# &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# print "\nsingle list:\n", join("\n", @single), "\n";
+# print "\ngz list:\n", join("\n", @gz), "\n";
+# print "\nplain list:\n", join("\n", @plain), "\n";
+# print "\ndouble list:\n", join("\n", @double), "\n";
+# print "\nindex list:\n", join("\n", @index), "\n";
+# print "\ncycles: $cycle, double last: $#double\n";
+# if ($cycle > 0 && $#double ge $cycle-1) {
+# &rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# print "\nall list:\n", join("\n", @list), "\n";
+# print "\nsingle list:\n", join("\n", @single), "\n";
+# print "\ngz list:\n", join("\n", @gz), "\n";
+# print "\nplain list:\n", join("\n", @plain), "\n";
+# print "\ndouble list:\n", join("\n", @double), "\n";
+# print "\nindex list:\n", join("\n", @index), "\n";
+# }
+# exit(0);
 
     # process each file
     #
@@ -584,7 +582,7 @@ sub err_msg($$@)
 
     # issue message
     #
-    print STDERR "$0: ERROR: ";
+    print STDERR "$0: ERROR($code): ";
     if (defined @args) {
     	printf STDERR $fmt, @args;
     } else {
@@ -618,7 +616,7 @@ sub warn_msg($$@)
 
     # issue message
     #
-    print STDERR "$0: Warn: ";
+    print STDERR "$0: Warn($code): ";
     if (defined @args) {
     	printf STDERR $fmt, @args;
     } else {
@@ -676,7 +674,6 @@ sub parse()
     #
     $verbose = $opt_v if defined $opt_v;
     print "DEBUG: verbose mode: set\n" if $verbose;
-    print "DEBUG: current directory: $cwd\n" if $verbose;
 
     # -m mode
     #
@@ -843,33 +840,15 @@ sub prepfile($\$\$\$)
     print "DEBUG: starting to process: $filename\n" if $verbose;
     print "\n# starting to process: $filename\n" if defined $opt_n;
 
-    # determine, untaint and cd to the file's directory
+    # determine the file's directory
     #
     $dir = dirname($filename);
-    if ($dir !~ m:^/:) {
-    	if ($dir eq ".") {
-	    $dir = $cwd;
-	} else {
-	    $dir = "$cwd/$dir";
-	}
-    }
-    if ($dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
-    	$dir = $1;
-    } else {
-	&warn_msg(17, "file directory has dangerious chars: $dir");
-	return $false;
-    }
-    if (! chdir($dir)) {
-    	&warn_msg(18, "cannot cd to $dir");
-	return $false;
-    }
-    print "cd $dir\n" if defined $opt_n;
-    print "DEBUG: working directory: $dir\n" if $verbose;
+    print "DEBUG: $filename dir is: $dir\n" if $verbose;
 
     # make sure that the OLD directory exists
     #
-    if (! -d $oldname) {
-	if (! mkdir($oldname, $archdir_mode)) {
+    if (! -d "$dir/$oldname") {
+	if (! mkdir("$dir/$oldname", $archdir_mode)) {
 	    &warn_msg(19, "cannot mkdir: $dir/$oldname");
 	    return $false;
 	} else {
@@ -899,11 +878,11 @@ sub prepfile($\$\$\$)
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
 	#
-	} elsif (-l "$oldname/archive") {
+	} elsif (-l "$dir/$oldname/archive") {
 
 	    # determine if OLD/archive points to archive_dir
 	    #
-	    ($dev1, $inum1, undef) = stat("$oldname/archive");
+	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
 	    	&err_msg(22, "prepfile: cannot stat archive dir: $archive_dir");
@@ -914,21 +893,21 @@ sub prepfile($\$\$\$)
 		# OLD/archive points to a different place (or nowhere), so
 		# we must remove it and form it as a symlink to archive_dir
 		#
-		if (!unlink("$oldname/archive") ||
-		    !symlink($archive_dir, "$oldname/archive")) {
+		if (!unlink("$dir/$oldname/archive") ||
+		    !symlink($archive_dir, "$dir/$oldname/archive")) {
 		    &warn_msg(23,
-			     "cannot symlink $oldname/archive to $archive_dir");
+			"cannot symlink $dir/$oldname/archive to $archive_dir");
 		    return $false;
 		}
 		printf("DEBUG: symlink %s to %s\n",
-		       "$oldname/archive", $archive_dir) if $verbose;
+		       "$dir/$oldname/archive", $archive_dir) if $verbose;
 	    }
 
-	} elsif (-d "$oldname/archive") {
+	} elsif (-d "$dir/$oldname/archive") {
 
 	    # determine if OLD/archive points to archive_dir
 	    #
-	    ($dev1, $inum1, undef) = stat("$oldname/archive");
+	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
 	    	&err_msg(24, "prepfile: can't stat archive dir: $archive_dir");
@@ -936,7 +915,7 @@ sub prepfile($\$\$\$)
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
 	    	&warn_msg(25,
-		    "$oldname/archive is a directory and is not $archive_dir");
+		    "$dir/$oldname/archive is a dir and is not $archive_dir");
 	    	return $false;
 	    }
 
@@ -946,20 +925,20 @@ sub prepfile($\$\$\$)
 
 	    # make OLD/archive a symlink to the archive_dir
 	    #
-	    if (!symlink($archive_dir, "$oldname/archive")) {
+	    if (!symlink($archive_dir, "$dir/$oldname/archive")) {
 		&warn_msg(26,
-		    "cannot symlink $oldname/archive to $archive_dir");
+		    "cannot symlink $dir/$oldname/archive to $archive_dir");
 		return $false;
 	    }
 	    printf("DEBUG: symlinked %s to %s\n",
-		   "$oldname/archive", $archive_dir) if $verbose;
+		   "$dir/$oldname/archive", $archive_dir) if $verbose;
 	}
 	$gz_dir = "$dir/$oldname/archive";
 
     # If we were not asked to use an archive subdir of OLD but one
     # exists anyway, be sure it has the right mode and is writable
     #
-    } elsif (-d "$oldname/archive") {
+    } elsif (-d "$dir/$oldname/archive") {
 
 	# archive is a directory, so OLD/archive is the .gz directory
 	#
@@ -975,10 +954,10 @@ sub prepfile($\$\$\$)
 
     # be sure that OLD, and if needed OLD/archive has the right modes
     #
-    (undef, undef, $mode, undef) = stat($oldname);
+    (undef, undef, $mode, undef) = stat("$dir/$oldname");
     $mode &= 07777;
     if ($mode != $archdir_mode) {
-	if (chmod($archdir_mode, $oldname)) {
+	if (chmod($archdir_mode, "$dir/$oldname")) {
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
@@ -987,12 +966,12 @@ sub prepfile($\$\$\$)
 	    return $false;
 	}
     }
-    if (! -w $oldname) {
+    if (! -w "$dir/$oldname") {
 	&warn_msg(28, "OLD directory: $dir/$oldname is not writable");
     	return $false;
     }
     #
-    if ($gz_dir ne $oldname) {
+    if ($gz_dir ne "$dir/$oldname") {
 	(undef, undef, $mode, undef) = stat($gz_dir);
 	$mode &= 07777;
 	if ($mode != $archdir_mode) {
@@ -1163,16 +1142,6 @@ sub loaddir($\@)
 	&err_msg(31, "loaddir: 2nd argument is not an array reference");
     }
 
-    # canonicalize the directory name
-    #
-    if ($dir !~ m:^/:) {
-    	if ($dir eq ".") {
-	    $dir = $cwd;
-	} else {
-	    $dir = "$cwd/$dir";
-	}
-    }
-
     # prep for scanning dir
     #
     if (! opendir DIR, $dir) {
@@ -1240,6 +1209,7 @@ sub scandir($$$\@)
 
     # scan OLD/ for files of the form filename\.\d{10}
     #
+    print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
     if (! &loaddir($olddir, \@filelist)) {
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
@@ -1248,15 +1218,16 @@ sub scandir($$$\@)
 
     # scan OLD/archive if it exists
     #
-    if (defined $archdir) {
+    if (defined $archdir && -d $archdir) {
 
 	# scan the OLD/archive/
 	#
+	print "DEBUG: scanning $archdir for $filename files\n" if $verbose;
 	if (! &loaddir($archdir, \@filelist)) {
 	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	@$list = grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist;
+	push(@$list, grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
 
     # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
     #
@@ -1264,11 +1235,12 @@ sub scandir($$$\@)
 
 	# scan the OLD/ again
 	#
+	print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
 	if (! &loaddir($olddir, \@filelist)) {
 	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	@$list = grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist;
+	push(@$list, grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
     }
 }
 
@@ -1578,12 +1550,18 @@ sub archive($$$$)
 
     # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
-    &scandir($file, $oldname, "$oldname/archive", \@list);
+    &scandir($file, "$dir/$oldname", "$dir/$oldname/archive", \@list);
     &cleanlist(\@list);
     &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     if ($cycle > 0 && $#double ge $cycle-1) {
 	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     }
+print "\nDEBUG: all list: ", join("\nDEBUG:", @list), "\n";
+print "\nDEBUG: single list: ", join("\nDEBUG:", @single), "\n";
+print "\nDEBUG: gz list: ", join("\nDEBUG:", @gz), "\n";
+print "\nDEBUG: plain list: ", join("\nDEBUG:", @plain), "\n";
+print "\nDEBUG: double list: ", join("\nDEBUG:", @double), "\n";
+print "\nDEBUG: index list: ", join("\nDEBUG:", @indx), "\n";
 
     # all done
     #
