@@ -3,10 +3,11 @@
 # savelog - save a log file
 #
 # This code was based on a pre-Copylefted version of savelog as distributed
-# in Smail.  Savelog was written by Landon Curt Noll (chongo@toad.com) with 
+# in Smail.  Savelog was written by Landon Curt Noll (chongo@toad.com) with
 # some mods/suggestions by Ronald S. Karr.
 #
 # Copyright (c) Landon Curt Noll and Ronald S. Karr, 1993.
+# Copyright (c) Landon Curt Noll, 1999.
 # All rights reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
@@ -41,11 +42,11 @@
 #
 # The savelog command saves and optionally compresses old copies of files
 # into an 'dir'/OLD sub-directory.  The 'dir' directory is determined from
-# the directory of each 'file'.  
+# the directory of each 'file'.
 #
 # Older version of 'file' are named:
 #
-#		OLD/'file'.<number>.gz
+#	OLD/'file'.<number>.gz
 #
 # where <number> is the version number, 0 being the newest.  By default,
 # version numbers > 0 are compressed (unless -l prevents it). The
@@ -55,32 +56,32 @@
 # If the 'file' does not exist or if it is zero length, no further processing
 # is performed.  However if -t was also given, it will be created.
 #
-# For files that do exist and have lengths greater than zero, the following 
+# For files that do exist and have lengths greater than zero, the following
 # actions are performed.
 #
 #	1) Version numered files are cycled.  That is version 6 is moved to
 #	   version 7, version is moved to becomes version 6, ... and finally
 #	   version 0 is moved to version 1.  Both compressed names and
-#	   uncompressed names are cycled, regardless of -t.  Missing version 
+#	   uncompressed names are cycled, regardless of -t.  Missing version
 #	   files are ignored.
 #
-#	2) The new OLD/file.1 is compressed and is changed subject to 
-#	   the -m, -o and -g flags.  This step is skipped if the -t flag 
+#	2) The new OLD/file.1 is compressed and is changed subject to
+#	   the -m, -o and -g flags.  This step is skipped if the -t flag
 #	   was given.
 #
 #	3) The main file is moved to OLD/file.0.
 #
-#	4) If the -m, -o, -g or -t flags are given, then file is created 
+#	4) If the -m, -o, -g or -t flags are given, then file is created
 #	   (as an empty file) subject to the given flags.
 #
 #	5) The new OLD/file.0 is chanegd subject to the -m, -o and -g flags.
 #
-# Note: If the OLD sub-directory does not exist, it will be created 
+# Note: If the OLD sub-directory does not exist, it will be created
 #	with mode 0755.
 #
 # Note: For backward compatibility, -u user means the same as -o user.
 #
-# Note: If no -t, -m, -o  or -g flag is given, then the primary log file is 
+# Note: If no -t, -m, -o  or -g flag is given, then the primary log file is
 #	not created.
 #
 # Note: Since the version numbers start with 0, version number <cycle>
@@ -104,7 +105,6 @@ ECHO="/usr/bin/echo"
 CHOWN="/usr/bin/chown"
 CHGRP="/usr/bin/chgrp"
 CHMOD="/usr/bin/chmod"
-TOUCH="/usr/bin/touch"
 MV="/usr/bin/mv"
 RM="/usr/bin/rm"
 EXPR="/usr/bin/expr"
@@ -127,48 +127,55 @@ elif [ -x /bin/gzip ]; then
 else
     GZIP="/usr/gnu/bin/gzip"
 fi
+if [ -x /usr/bin/test ]; then
+    TEST="/usr/bin/test"
+else
+    TEST="/bin/test"
+fi
+export PATH COMP_FLAG DOT_Z ECHO CHOWN CHGRP CHMOD MV RM EXPR MKDIR
+export GETOPT GZIP TEST
 
 # paranoid firewall
 #
 if [ ! -x "$ECHO" ]; then
-	echo "$prog: cannot find echo executable: $ECHO" 1>&2
-	exit 1
+    echo "$prog: cannot find echo executable: $ECHO" 1>&2
+    exit 1
 fi
 if [ ! -x "$GZIP" ]; then
-	$ECHO "$prog: cannot find gzip executable: $GZIP" 1>&2
-	exit 2
+    $ECHO "$prog: cannot find gzip executable: $GZIP" 1>&2
+    exit 2
 fi
 if [ ! -x "$CHOWN" ]; then
-	$ECHO "$prog: cannot find chown executable: $CHOWN" 1>&2
-	exit 3
+    $ECHO "$prog: cannot find chown executable: $CHOWN" 1>&2
+    exit 3
 fi
 if [ ! -x "$CHGRP" ]; then
-	$ECHO "$prog: cannot find chgrp executable: $CHGRP" 1>&2
-	exit 4
-fi
-if [ ! -x "$TOUCH" ]; then
-	$ECHO "$prog: cannot find touch executable: $TOUCH" 1>&2
-	exit 5
+    $ECHO "$prog: cannot find chgrp executable: $CHGRP" 1>&2
+    exit 4
 fi
 if [ ! -x "$MV" ]; then
-	$ECHO "$prog: cannot find mv executable: $MV" 1>&2
-	exit 6
+    $ECHO "$prog: cannot find mv executable: $MV" 1>&2
+    exit 5
 fi
 if [ ! -x "$RM" ]; then
-	$ECHO "$prog: cannot find rm executable: $RM" 1>&2
-	exit 7
+    $ECHO "$prog: cannot find rm executable: $RM" 1>&2
+    exit 6
 fi
 if [ ! -x "$EXPR" ]; then
-	$ECHO "$prog: cannot find expr executable: $EXPR" 1>&2
-	exit 8
+    $ECHO "$prog: cannot find expr executable: $EXPR" 1>&2
+    exit 7
 fi
 if [ ! -x "$MKDIR" ]; then
-	$ECHO "$prog: cannot find mkdir executable: $MKDIR" 1>&2
-	exit 9
+    $ECHO "$prog: cannot find mkdir executable: $MKDIR" 1>&2
+    exit 8
 fi
 if [ ! -x "$GETOPT" ]; then
-	$ECHO "$prog: cannot find getopt executable: $GETOPT" 1>&2
-	exit 10
+    $ECHO "$prog: cannot find getopt executable: $GETOPT" 1>&2
+    exit 9
+fi
+if [ ! -x "$TEST" ]; then
+    $ECHO "$prog: cannot find test executable: $TEST" 1>&2
+    exit 10
 fi
 
 # parse args
@@ -183,173 +190,190 @@ count=7
 compress=1
 set -- `$GETOPT m:o:u:g:c:lt $*`
 if [ $# -eq 1 -o $? -ne 0 ]; then
-	$ECHO "usage: $prog [-m mode][-o owner][-g group][-t][-c cycle][-l] file ..." 1>&2
-	exit 11
+    $ECHO "usage: $prog [-m mode][-o owner][-g group][-t][-c cycle][-l] file ..." 1>&2
+    exit 11
 fi
 for i in $*; do
-	case "$i" in
-	-m) mode="$2"; shift 2;;
-	-o) user="$2"; shift 2;;
-	-u) user="$2"; shift 2;;
-	-g) group="$2"; shift 2;;
-	-c) count="$2"; shift 2;;
-	-t) touch="1"; shift;;
-	-l) compress=""; shift;;
-	--) shift; break;;
-	esac
+    case "$i" in
+    -m) mode="$2"; shift 2;;
+    -o) user="$2"; shift 2;;
+    -u) user="$2"; shift 2;;
+    -g) group="$2"; shift 2;;
+    -c) count="$2"; shift 2;;
+    -t) touch="1"; shift;;
+    -l) compress=""; shift;;
+    --) shift; break;;
+    esac
 done
 if [ "$count" -lt 2 ]; then
-	$ECHO "$prog: count must be at least 2" 1>&2
-	exit 12
+    $ECHO "$prog: count must be at least 2" 1>&2
+    exit 12
 fi
 
 # cycle thru filenames
 while [ $# -gt 0 ]; do
 
-	# get the filename
-	filename="$1"
-	shift
+    # get the filename
+    filename="$1"
+    shift
 
-	# catch bogus non-files
-	#
-	# We avoid dealing with symlinks as well ... one should
-	# savelog the actual file, not the symlink
-	#
-	if [ ! -f "$filename" ]; then
-		$ECHO "$prog: $filename is not a regular file" 1>&2
-		exitcode=13
+    # catch files that are not regular files
+    #
+    if [ -d "$filename" -o -b "$filename" -o \
+	 -c "$filename" -o -p "$filename" ]; then
+	$ECHO "$prog: $filename is not a regular file" 1>&2
+	exitcode=13
+	continue
+    fi
+    #
+    # Testing for symbolic links is a problem ...
+    #
+    # Some /bin/sh's do not have [ -L foo ]
+    # Some require [ -h foo ]
+    # Some claim that /bin/test -L will go away someday
+    #      but still have it
+    #
+    # For all of these conclicting claims, /bin/test -h seems
+    # to be the most available.
+    #
+    if $TEST -h "$filename" 2>/dev/null; then
+	$ECHO "$prog: $filename is symlink" 1>&2
+	exitcode=14
+	continue
+    fi
+
+    # if an missing or empty file, create/touch it and move on
+    #
+    if [ ! -s "$filename" ]; then
+	# touch it if -t was given
+	if [ ! -z "$touch" ]; then
+	    (:> "$filename") 2>/dev/null
+	    if [ ! -f "$filename" ]; then
+		$ECHO "$prog: could not touch $filename" 1>&2
+		exitcode=15
 		continue
+	    fi
 	fi
-	if [ -L "$filename" ]; then
-		$ECHO "$prog: $filename is symlink" 1>&2
-		exitcode=14
-		continue
-	fi
-
-	# if not a file or empty, do nothing major
-	if [ ! -s "$filename" ]; then
-		# if -t was given and it does not exist, create it
-		if [ ! -z "$touch" -a ! -f "$filename" ]; then 
-			$TOUCH "$filename"
-			if [ "$?" -ne 0 ]; then
-				$ECHO "$prog: could not touch $filename" 1>&2
-				exitcode=15
-				continue
-			fi
-			if [ ! -z "$user" ]; then 
-				$CHOWN "$user" "$filename"
-			fi
-			if [ ! -z "$group" ]; then 
-				$CHGRP "$group" "$filename"
-			fi
-			if [ ! -z "$mode" ]; then 
-				$CHMOD "$mode" "$filename"
-			fi
-		fi
-		continue
-	fi
-
-	# be sure that the savedir exists and is writable
-	savedir=`$EXPR "$filename" : '\(.*\)/'`
-	if [ -z "$savedir" ]; then
-		savedir=./OLD
-	else
-		savedir="$savedir/OLD"
-	fi
-	if [ ! -s "$savedir" ]; then
-		$MKDIR -p "$savedir"
-		if [ $? -ne 0 ]; then
-			$ECHO "$prog: could not mkdir $savedir" 1>&2
-			exitcode=16
-			continue
-		fi
-		$CHMOD 0755 "$savedir"
-	fi
-	if [ ! -d "$savedir" ]; then
-		$ECHO "$prog: $savedir is not a directory" 1>&2
-		exitcode=17
-		continue
-	fi
-	if [ ! -w "$savedir" ]; then
-		$ECHO "$prog: directory $savedir is not writable" 1>&2
-		exitcode=18
-		continue
-	fi
-
-	# deterine our uncompressed file names
-	newname=`$EXPR "$filename" : '.*/\(.*\)'`
-	if [ -z "$newname" ]; then
-		newname="$savedir/$filename"
-	else
-		newname="$savedir/$newname"
-	fi
-
-	# cycle the old compressed log files
-	cycle=`$EXPR "$count" - 1`
-	$RM -f "$newname.$cycle" "$newname.$cycle$DOT_Z"
-	while [ "$cycle" -gt 1 ]; do
-		# --cycle
-		oldcycle="$cycle"
-		cycle=`$EXPR "$cycle" - 1`
-		# cycle log
-		if [ -f "$newname.$cycle$DOT_Z" ]; then
-			$MV -f "$newname.$cycle$DOT_Z" "$newname.$oldcycle$DOT_Z"
-		fi
-		if [ -f "$newname.$cycle" ]; then
-			# file was not compressed for some reason move it anyway
-			$MV -f "$newname.$cycle" "$newname.$oldcycle"
-		fi
-	done
-
-	# compress the old uncompressed log if needed
-	if [ -f "$newname.0" ]; then
-		if [ -z "$compress" ]; then
-			newfile="$newname.1"
-			$MV -f "$newname.0" "$newfile"
-		else
-			newfile="$newname.1$DOT_Z"
-			$RM -f "$newname"
-			$GZIP $COMP_FLAG -c "$newname.0" > "$newfile"
-			$RM -f "$newname.0"
-		fi
-		if [ ! -z "$user" ]; then 
-			$CHOWN "$user" "$newfile"
-		fi
-		if [ ! -z "$group" ]; then 
-			$CHGRP "$group" "$newfile"
-		fi
-		if [ ! -z "$mode" ]; then 
-			$CHMOD "$mode" "$newfile"
-		fi
-	fi
-
-	# move the file into the file.0 holding place
-	$MV -f "$filename" "$newname.0"
-
-	# replace file if needed
-	if [ ! -z "$touch" -o ! -z "$user" -o \
-	     ! -z "$group" -o ! -z "$mode" ]; then 
-		$TOUCH "$filename"
-	fi
-	if [ ! -z "$user" ]; then 
+	# force mode, group and/or mode as directed by -o, -g and/or -m
+	if [ -f "$filename" ]; then
+	    if [ ! -z "$user" ]; then
 		$CHOWN "$user" "$filename"
-	fi
-	if [ ! -z "$group" ]; then 
+	    fi
+	    if [ ! -z "$group" ]; then
 		$CHGRP "$group" "$filename"
-	fi
-	if [ ! -z "$mode" ]; then 
+	    fi
+	    if [ ! -z "$mode" ]; then
 		$CHMOD "$mode" "$filename"
+	    fi
 	fi
+	continue
+    fi
 
-	# fix the permissions on the holding place file.0 file
-	if [ ! -z "$user" ]; then 
-		$CHOWN "$user" "$newname.0"
+    # be sure that the savedir exists and is writable
+    savedir=`$EXPR "$filename" : '\(.*\)/'`
+    if [ -z "$savedir" ]; then
+	savedir=./OLD
+    else
+	savedir="$savedir/OLD"
+    fi
+    if [ ! -s "$savedir" ]; then
+	$MKDIR -p "$savedir"
+	if [ $? -ne 0 ]; then
+	    $ECHO "$prog: could not mkdir $savedir" 1>&2
+	    exitcode=16
+	    continue
 	fi
-	if [ ! -z "$group" ]; then 
-		$CHGRP "$group" "$newname.0"
+	$CHMOD 0755 "$savedir"
+    fi
+    if [ ! -d "$savedir" ]; then
+	$ECHO "$prog: $savedir is not a directory" 1>&2
+	exitcode=17
+	continue
+    fi
+    if [ ! -w "$savedir" ]; then
+	$ECHO "$prog: directory $savedir is not writable" 1>&2
+	exitcode=18
+	continue
+    fi
+
+    # deterine our uncompressed file names
+    newname=`$EXPR "$filename" : '.*/\(.*\)'`
+    if [ -z "$newname" ]; then
+	newname="$savedir/$filename"
+    else
+	newname="$savedir/$newname"
+    fi
+
+    # cycle the old compressed log files
+    cycle=`$EXPR "$count" - 1`
+    $RM -f "$newname.$cycle" "$newname.$cycle$DOT_Z"
+    while [ "$cycle" -gt 1 ]; do
+	# --cycle
+	oldcycle="$cycle"
+	cycle=`$EXPR "$cycle" - 1`
+	# cycle log
+	if [ -f "$newname.$cycle$DOT_Z" ]; then
+	    $MV -f "$newname.$cycle$DOT_Z" "$newname.$oldcycle$DOT_Z"
 	fi
-	if [ ! -z "$mode" ]; then 
-		$CHMOD "$mode" "$newname.0"
+	if [ -f "$newname.$cycle" ]; then
+	    # file was not compressed for some reason move it anyway
+	    $MV -f "$newname.$cycle" "$newname.$oldcycle"
 	fi
+    done
+
+    # compress the old uncompressed log if needed
+    if [ -f "$newname.0" ]; then
+	if [ -z "$compress" ]; then
+	    newfile="$newname.1"
+	    $MV -f "$newname.0" "$newfile"
+	else
+	    newfile="$newname.1$DOT_Z"
+	    $RM -f "$newname"
+	    $GZIP $COMP_FLAG -c "$newname.0" > "$newfile"
+	    $RM -f "$newname.0"
+	fi
+	if [ ! -z "$user" ]; then
+	    $CHOWN "$user" "$newfile"
+	fi
+	if [ ! -z "$group" ]; then
+	    $CHGRP "$group" "$newfile"
+	fi
+	if [ ! -z "$mode" ]; then
+	    $CHMOD "$mode" "$newfile"
+	fi
+    fi
+
+    # move the file into the file.0 holding place
+    $MV -f "$filename" "$newname.0"
+
+    # replace file if needed
+    if [ ! -z "$touch" -o ! -z "$user" -o ! -z "$group" -o ! -z "$mode" ]; then
+	(:> "$filename") 2>/dev/null
+	if [ ! -f "$filename" ]; then
+	    $ECHO "$prog: could not touch $filename" 1>&2
+	    exitcode=19
+	    continue
+	fi
+    fi
+    if [ ! -z "$user" ]; then
+	$CHOWN "$user" "$filename"
+    fi
+    if [ ! -z "$group" ]; then
+	$CHGRP "$group" "$filename"
+    fi
+    if [ ! -z "$mode" ]; then
+	$CHMOD "$mode" "$filename"
+    fi
+
+    # fix the permissions on the holding place file.0 file
+    if [ ! -z "$user" ]; then
+	$CHOWN "$user" "$newname.0"
+    fi
+    if [ ! -z "$group" ]; then
+	$CHGRP "$group" "$newname.0"
+    fi
+    if [ ! -z "$mode" ]; then
+	$CHMOD "$mode" "$newname.0"
+    fi
 done
 exit "$exitcode"
