@@ -527,11 +527,11 @@ $opt_n = 1;	# XXX - DEBUG
 # # XXX - debug
 # #
 # my (@list, @single, @gz, @plain, @double, @index);
-# &scandir("foo", "OLD", "OLD/archive", \@list);
+# &scan_dir("foo", "OLD", "OLD/archive", \@list);
 # print "scanned list\n", join("\n", @list), "\n";
-# &cleanlist(\@list);
+# &clean_list(\@list);
 # print "\ncleaned list:\n", join("\n", @list), "\n";
-# &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# &split_list(\@list, \@single, \@gz, \@plain, \@double, \@index);
 # print "\nsingle list:\n", join("\n", @single), "\n";
 # print "\ngz list:\n", join("\n", @gz), "\n";
 # print "\nplain list:\n", join("\n", @plain), "\n";
@@ -539,7 +539,7 @@ $opt_n = 1;	# XXX - DEBUG
 # print "\nindex list:\n", join("\n", @index), "\n";
 # print "\ncycles: $cycle, double last: $#double\n";
 # if ($cycle > 0 && $#double ge $cycle-1) {
-# &rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# &rm_cycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
 # print "\nall list:\n", join("\n", @list), "\n";
 # print "\nsingle list:\n", join("\n", @single), "\n";
 # print "\ngz list:\n", join("\n", @gz), "\n";
@@ -858,7 +858,7 @@ sub prepfile($\$\$\$)
     #
     if (! -d "$dir/$oldname") {
 	if (! mkdir("$dir/$oldname", $archdir_mode)) {
-	    &warn_msg(19, "cannot mkdir: $dir/$oldname");
+	    &warn_msg(17, "cannot mkdir: $dir/$oldname");
 	    return $false;
 	} else {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
@@ -875,14 +875,14 @@ sub prepfile($\$\$\$)
 	if ($archive_dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	    $archive_dir = $1;
 	} else {
-	    &err_msg(20,
+	    &err_msg(18,
 	    	"prepfile: archive dir has dangerious chars: $archive_dir");
 	}
 
 	# The archive directory must exist
 	#
 	if (! -d $archive_dir) {
-	    &err_msg(21,
+	    &err_msg(19,
 	    	"prepfile: archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
@@ -894,7 +894,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(22, "prepfile: cannot stat archive dir: $archive_dir");
+	    	&err_msg(20, "prepfile: cannot stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -904,7 +904,7 @@ sub prepfile($\$\$\$)
 		#
 		if (!unlink("$dir/$oldname/archive") ||
 		    !symlink($archive_dir, "$dir/$oldname/archive")) {
-		    &warn_msg(23,
+		    &warn_msg(21,
 			"cannot symlink $dir/$oldname/archive to $archive_dir");
 		    return $false;
 		}
@@ -919,11 +919,11 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(24, "prepfile: can't stat archive dir: $archive_dir");
+	    	&err_msg(22, "prepfile: can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	&warn_msg(25,
+	    	&warn_msg(23,
 		    "$dir/$oldname/archive is a dir and is not $archive_dir");
 	    	return $false;
 	    }
@@ -935,7 +935,7 @@ sub prepfile($\$\$\$)
 	    # make OLD/archive a symlink to the archive_dir
 	    #
 	    if (!symlink($archive_dir, "$dir/$oldname/archive")) {
-		&warn_msg(26,
+		&warn_msg(24,
 		    "cannot symlink $dir/$oldname/archive to $archive_dir");
 		return $false;
 	    }
@@ -970,13 +970,13 @@ sub prepfile($\$\$\$)
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
-	    &warn_msg(27, "unable to chmod 0%03o OLD directory: %s",
+	    &warn_msg(25, "unable to chmod 0%03o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
 	    return $false;
 	}
     }
     if (! -w "$dir/$oldname") {
-	&warn_msg(28, "OLD directory: $dir/$oldname is not writable");
+	&warn_msg(26, "OLD directory: $dir/$oldname is not writable");
     	return $false;
     }
     #
@@ -1140,6 +1140,8 @@ sub safe_file_create($$$$$)
 #	0 ==> scan was unsuccessful
 #	1 ==> scan was successful or ignored
 #
+# NOTE: This routine will not rescan a directory once it has been read once.
+#
 sub loaddir($\@)
 {
     my ($dir, $list) = @_;	# get args
@@ -1155,7 +1157,6 @@ sub loaddir($\@)
     # if we found it in the cache, return the cached filenames
     #
     if (defined $dir_indx{$dir}) {
-	print "DEBUG: found $dir in cache indx: $dir_indx{$dir}\n" if $verbose;
 	$#$list = -1;
 	for ($i=0; defined $dir_cache[$dir_indx{$dir}][$i]; ++$i) {
 	    push(@$list, $dir_cache[$dir_indx{$dir}][$i]);
@@ -1181,7 +1182,6 @@ sub loaddir($\@)
     #
     $dir_indx{$dir} = @dir_cache;
     $dir_cache[@dir_cache] = [ @$list ];
-    print "DEBUG: cached $dir in cache indx: $dir_indx{$dir}\n" if $verbose;
 
     # cleanup, all done
     #
@@ -1190,10 +1190,10 @@ sub loaddir($\@)
 }
 
 
-# scandir - scan the OLD and possibly archive dir for archived filenames
+# scan_dir - scan the OLD and possibly archive dir for archived filenames
 #
 # usage:
-#	&scandir($filename, $olddir, $archdir, \@filelist)
+#	&scan_dir($filename, $olddir, $archdir, \@filelist)
 #
 #	$filename	archived filename to scan for in $olddir or $archdir
 #	$olddir		OLD directory name to scan in
@@ -1218,7 +1218,7 @@ sub loaddir($\@)
 #
 # NOTE: We will return the list sorted by timestamp
 #
-sub scandir($$$\@)
+sub scan_dir($$$\@)
 {
     my ($filename, $olddir, $archdir, $list) = @_;	# get args
     my @filelist;	# filenames found under $dir
@@ -1227,7 +1227,7 @@ sub scandir($$$\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(31, "scandir: 4th argument is not an array reference");
+	&err_msg(31, "scan_dir: 4th argument is not an array reference");
     }
 
     # scan OLD/ for files of the form filename\.\d{10}
@@ -1260,7 +1260,7 @@ sub scandir($$$\@)
 	#
 	print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
 	if (! &loaddir($olddir, \@filelist)) {
-	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
+	    &warn_msg(28, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
 	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
@@ -1283,7 +1283,7 @@ sub rm($$)
     # case: -n was given, only print action\
     #
     if (defined $opt_n) {
-	
+
 	# just print what we would have done
 	#
 	print "rm -f $filename\t# $reason\n";
@@ -1296,7 +1296,7 @@ sub rm($$)
 	#
 	if ($filename =~ m#^/# || $filename =~ m#^\.\.\/# ||
 	    $filename =~ m#^/\.\./"#) {
-	    &warn_msg(35, "unsafe filename to remove: $filename");
+	    &warn_msg(29, "unsafe filename to remove: $filename");
 	    return;
 	}
 	if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
@@ -1309,19 +1309,19 @@ sub rm($$)
 	    print "DEBUG: rm $filename\n" if $verbose;
 
 	} else {
-	    &warn_msg(36, "cannot remove $filename\n");
+	    &warn_msg(30, "cannot remove $filename\n");
 	}
     }
 }
 
 
-# cleanlist - remove duplicate foo and foo.gz files and stale .indx files
+# clean_list - remove duplicate foo and foo.gz files and stale .indx files
 #
-#	&cleanlist(\@list)
+#	&clean_list(\@list)
 #
 #	@list		list of archived files of $filename to be cleaned
 #
-sub cleanlist(\@)
+sub clean_list(\@)
 {
     my $list = $_[0];	# get args
     my $prev;		# previous item on list
@@ -1331,7 +1331,7 @@ sub cleanlist(\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(37, "cleanlist: 2nd argument is not an array reference");
+	&err_msg(31, "clean_list: 2nd argument is not an array reference");
     }
 
     # do nothing if the list has 1 or 0 files in it
@@ -1346,13 +1346,13 @@ sub cleanlist(\@)
     #	    because splicing the array can change what is previous.
     #
     for ($prev = $$list[0], $cur = $$list[$i=1];
-         $i <= $#$list; 
+         $i <= $#$list;
 	 $prev = $$list[$i++], $cur = $$list[$i]) {
 
 	# firewall - catch dup and bogus sorting
 	#
 	if ($prev eq $cur) {
-	    &err_msg(38, "cleanlist: found duplicate list item: $cur");
+	    &err_msg(32, "clean_list: found duplicate list item: $cur");
 	}
 
 	# catch foo and foo.gz and remove foo
@@ -1379,19 +1379,19 @@ sub cleanlist(\@)
 }
 
 
-# splitlist - split a list of files into single, double, gz and index files
+# split_list - split a list of files into single, double, gz and index files
 #
 # given:
-#	&splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index)
+#	&split_list(\@list, \@single, \@gz, \@plain, \@double, \@index)
 #
-#	@list		a list of archived files (from scandir, for example)
+#	@list		a list of archived files (from scan_dir, for example)
 #	@single		files of the form name\.\d{10}
 #	@gz		files of the form name\.\d{10}\-\d{10}\.gz
 #	@plain		files of the form name\.\d{10}\-\d{10}
 #	@double		both @gz and @plain files
 #	@index		files of the form name\.\d{10}\-\d{10}\.inedx
 #
-sub splitlist(\@\@\@\@\@\@)
+sub split_list(\@\@\@\@\@\@)
 {
     my ($list, $single, $gz, $plain, $double, $index) = @_;	# get args
     my $i;
@@ -1403,7 +1403,7 @@ sub splitlist(\@\@\@\@\@\@)
 	ref($list) ne 'ARRAY' || ref($single) ne 'ARRAY' ||
 	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
 	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
-	&err_msg(39, "splitlist: arg(s) are not an array reference");
+	&err_msg(33, "split_list: arg(s) are not an array reference");
     }
 
     # truncate lists
@@ -1443,18 +1443,17 @@ sub splitlist(\@\@\@\@\@\@)
 	# we should not get here
 	#
 	} else {
-	    &err_msg(40, "splitlist: found bogus member of file list: $i");
+	    &err_msg(34, "split_list: found bogus member of file list: $i");
 	}
     }
 }
 
 
-# rmcycles - split a list of files into single, double, gz and index files
+# rm_cycles - split a list of files into single, double, gz and index files
 #
 # given:
-#	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index)
+#	&rm_cycles(\@single, \@gz, \@plain, \@double, \@index)
 #
-#	@list		a list of archived files (from scandir, for example)
 #	@single		files of the form name\.\d{10}
 #	@gz		files of the form name\.\d{10}\-\d{10}\.gz
 #	@plain		files of the form name\.\d{10}\-\d{10}
@@ -1469,10 +1468,20 @@ sub splitlist(\@\@\@\@\@\@)
 # NOTE: The reason why the other arrays are passed in is so that \@list,
 #	\@gz and \@plain will have removed files removed from them as well.
 #
-sub rmcycles(\@\@\@\@\@\@)
+sub rm_cycles(\@\@\@\@\@)
 {
-    my ($list, $single, $gz, $plain, $double, $index) = @_;	# get args
+    my ($single, $gz, $plain, $double, $index) = @_;	# get args
     my $i;
+
+    # verify that we were given references to arrays
+    #
+    if (!defined $single || !defined $gz ||
+        !defined $plain || !defined $double || !defined $index ||
+	ref($single) ne 'ARRAY' ||
+	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
+	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
+	&err_msg(35, "split_list: arg(s) are not an array reference");
+    }
 
     # Remove all but the oldest $cycle-1 files found in @$double
     #
@@ -1481,12 +1490,6 @@ sub rmcycles(\@\@\@\@\@\@)
 	&rm($$double[$i], "keeping newest $cycle-1 cycles");
     }
     splice @$double, 0, $i;
-
-    # rebuild @$list
-    #
-    $#$list = -1;
-    push(@$list, @$single);
-    push(@$list, @$double);
 
     # rebuild @$gz and @$plain
     #
@@ -1500,6 +1503,100 @@ sub rmcycles(\@\@\@\@\@\@)
 	}
     }
     return;
+}
+
+
+# clean_tstamp - prune away too many file.tstamp files
+#
+# usage:
+#	&clean_tstamp($filename, \@single);
+#
+#	$filename	path of the file being archived
+#	@single		files of the form name\.\d{10}
+#
+# This function will perform actions as given in step 3 when more than
+# one file of the form file.tstamp exists.  We will look to see if one
+# of these files are hardlinked to the file being archived.  If yes, then
+# all other file.tstamp files will be removed.  If no, then all but the
+# newest file.tstamp file will be removed.
+#
+sub clean_tstamp($\@)
+{
+    my ($filename, $list) = @_;		# get args
+    my $f_dev;				# dev number of $filename
+    my $f_inum;				# inode number of $filename
+    my $f_links;			# link count for $filename
+    my $t_dev;				# dev number of a file.tstamp file
+    my $t_inum;				# inode number of a file.tstamp file
+    my $t_links;			# link count for a file.tstamp file
+    my $keepname;			# file.tstamp file to keep
+    my $i;
+
+    # verify that the list arg is an array reference
+    #
+    if (!defined($list) || ref($list) ne 'ARRAY') {
+	&err_msg(36, "clean_tstamp: 2nd argument is not an array reference");
+    }
+
+    # stat the filename being archived
+    #
+    ($f_dev, $f_inum, undef, $f_links, undef) = stat($filename);
+    if (!defined $f_dev || !defined $f_inum || !defined $f_links) {
+	&err_msg(37, "clean_tstamp: failed to stat $filename");
+    }
+
+    # If the filename is linked to another file, look to see if any
+    # of the file.tstamps are that file
+    #
+    if ($f_links > 1) {
+
+	# look for a file.tstamp file linked to filename
+	for $i ( reverse @$list ) {
+	    ($t_dev, $t_inum, undef, $t_links, undef) = stat($i);
+	    if (defined $t_links && $f_links == $t_links &&
+	        defined $t_dev && $f_dev == $t_dev &&
+	        defined $t_inum && $f_inum == $t_inum) {
+		# found a linked file.tstamp file
+		print "DEBUG: $filename is linked to $i\n" if $verbose;
+		$keepname = $i;
+		last;
+	    }
+	}
+
+	# pick the newest $tstamp file of not linked file.tstamp file was found
+	#
+	if (! defined $keepname) {
+	    $keepname = $$list[$#$list];
+	}
+
+    # The filename is not linked to any file, keep the newest file.tstamp file
+    #
+    } else {
+	$keepname = $$list[$#$list];
+    }
+
+    # Remove all but the one file.tstamp file are are keeping
+    #
+    print "DEBUG: remove all tstamp files except: $keepname\n" if $verbose;
+    for $i ( @$list ) {
+
+	# keep the keeper file
+	#
+	next if $i eq $keepname;
+
+	# remove tstamp file with an explination
+	#
+	if ($f_links > 1) {
+	    &rm($i, "removing extra unlinked tstamp file");
+    	} else {
+	    &rm($i, "removing older tstamp file");
+	}
+    }
+
+    # Clean out the single list
+    #
+    $#$list = 0;
+    $$list[0] = $keepname;
 }
 
 
@@ -1531,7 +1628,7 @@ sub archive($$$$)
 
     # step 0 - Determine if /a/path/file exists
     #
-    if (! -f $file) {
+    if (! -f $filename) {
 
 	# -T prevents us from touching missing files
 	#
@@ -1547,7 +1644,7 @@ sub archive($$$$)
 
 	    # create the file
 	    #
-	    if (! &safe_file_create($file, $file_uid, $file_gid,
+	    if (! &safe_file_create($filename, $file_uid, $file_gid,
 	    			    $file_mode, $false)) {
 	    	&warn_msg(41, "could not exclusively create $filename");
 		return $false;
@@ -1556,7 +1653,7 @@ sub archive($$$$)
 
 	# verfiy that the file still exists
 	#
-	if (! -f $file) {
+	if (! -f $filename) {
 	    &warn_msg(42, "created $filename and now it is missing");
 	    return $false;
 	}
@@ -1564,7 +1661,7 @@ sub archive($$$$)
 
     # step 1 - Determine if /a/path/file is empty
     #
-    if (-z $file && ! defined $opt_z) {
+    if (-z $filename && ! defined $opt_z) {
 
 	print "DEBUG: $filename is empty and -z was not given\n" if $verbose;
 	print "DEBUG: nothing to do for $filename\n" if $verbose;
@@ -1573,11 +1670,17 @@ sub archive($$$$)
 
     # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
-    &scandir($file, "$dir/$oldname", "$dir/$oldname/archive", \@list);
-    &cleanlist(\@list);
-    &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@indx);
+    &scan_dir($filename, "$dir/$oldname", "$dir/$oldname/archive", \@list);
+    &clean_list(\@list);
+    &split_list(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     if ($cycle > 0 && $#double ge $cycle-1) {
-	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@indx);
+	&rm_cycles(\@single, \@gz, \@plain, \@double, \@indx);
+    }
+
+    # step 3 - deal with too many file.timestamp files
+    #
+    if (scalar(@single) > 1) {
+	&clean_tstamp($filename, \@single);
     }
 
     # XXX - misc debug stuff
