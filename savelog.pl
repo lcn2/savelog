@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.13 $
-# @(#) $Id: savelog.pl,v 1.13 2000/01/30 06:40:11 chongo Exp chongo $
+# @(#) $Revision: 1.14 $
+# @(#) $Id: savelog.pl,v 1.14 2000/01/30 08:54:31 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -1237,9 +1237,7 @@ sub scandir($$$\@)
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
     }
-print "DEBUG: filelist #1:\n  DGB: ", join("\n  DBG: ", @filelist), "\n";
     @$list = sort grep m#/$filename\.\d{10}$#, @filelist;
-print "DEBUG: list #1:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 
     # scan OLD/archive if it exists
     #
@@ -1252,9 +1250,7 @@ print "DEBUG: list #1:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-print "DEBUG: filelist #2:\n  DBG: ", join("\n  DBG: ", @filelist), "\n";
 	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
-print "DEBUG: list #2:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 
     # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
     #
@@ -1267,9 +1263,7 @@ print "DEBUG: list #2:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-print "DEBUG: filelist #3:\n  DGB: ", join("\n  DBG: ", @filelist), "\n";
 	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
-print "DEBUG: list #3:\n  DBG:  ", join("\n  DBG: ", @$list), "\n";
     }
 }
 
@@ -1588,12 +1582,12 @@ sub archive($$$$)
 
     # XXX - misc debug stuff
     #
-    print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
-    print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
-    print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
-    print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
-    print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
-    print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
+    # print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
+    # print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
+    # print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
+    # print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
+    # print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
+    # print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
 
     # all done
     #
