@@ -3,16 +3,22 @@
 # mail - mail indexing routine for savelog
 #
 # usage:
-#	mail file indx
+#	mail file [indx]
 #
 #	file	the filename to index
-#	indx	the index name
+#	indx	the index name (default based on file)
 
 # usage
 #
 use strict;
 
 # my vars
+#
+$ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
+$ENV{IFS} = " \t\n";
+$ENV{SHELL} = "/bin/sh";
+delete $ENV{ENV};
+delete $ENV{GZIP};
 #
 my $file;		# input filename
 my $indx_file;		# filename of the index file
@@ -30,12 +36,29 @@ my $end_hdr;		# 1 => end of header found
 
 # parse args
 #
-if (!defined $ARGV[0] && !defined $ARGV[1]) {
+if (!defined $ARGV[0]) {
     print STDERR "usage: $0 file indx\n";
     exit 1;
 }
 $file = $ARGV[0];
-$indx_file = $ARGV[1];
+if (defined $ARGV[1]) {
+    $indx_file = $ARGV[1];
+} else {
+    ($indx_file = "$file.indx") =~ s/\.gz\.indx$/.indx/;
+}
+
+# untaint arg
+#
+if ($file =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    $file = $1;
+} else {
+    die "$0: file has bad chars\n";
+}
+if ($indx_file =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    $indx_file = $1;
+} else {
+    die "$0: indx_file has bad chars\n";
+}
 
 # determine the name of the index file
 #
