@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 3.4 $
-# @(#) $Id: savelog.pl,v 3.4 2002/10/02 09:33:48 chongo Exp chongo $
+# @(#) $Revision: 3.5 $
+# @(#) $Id: savelog.pl,v 3.5 2003/06/04 00:42:13 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
@@ -442,6 +442,7 @@
 # requirements
 #
 use strict;
+use bytes;
 use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
 	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_L $opt_v

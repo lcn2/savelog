@@ -11,6 +11,7 @@
 # usage
 #
 use strict;
+use bytes;
 
 # my vars
 #
