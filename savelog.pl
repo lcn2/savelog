@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.6 $
-# @(#) $Id: savelog.pl,v 1.6 2000/01/22 11:04:53 chongo Exp chongo $
+# @(#) $Revision: 1.7 $
+# @(#) $Id: savelog.pl,v 1.7 2000/01/24 09:05:22 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -344,7 +344,7 @@
 #
 #	   Assertion: At this point the file exists or we have stopped.
 #
-#	1) Determine if /a/path is empty.  Do nothing else if empty
+#	1) Determine if /a/path/file is empty.  Do nothing else if empty
 #	   unless -z was given.
 #
 #	   Assertion: At this point the file is non-empty or -z was given
@@ -1142,6 +1142,15 @@ sub archive($$$$)
 	    &warning(32, "created $filename and now it is missing");
 	    return $false;
 	}
+    }
+
+    # step 1 - Determine if /a/path/file is empty
+    #
+    if (-z $file && ! defined $opt_z) {
+
+	print "DEBUG: $filename is empty and -z was not given\n" if $verbose;
+	print "DEBUG: nothing to do for $filename\n" if $verbose;
+	return $true;
     }
 
     # all done
