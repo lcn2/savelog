@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.3 $
-# @(#) $Id: savelog.pl,v 1.3 2000/01/21 15:30:36 chongo Exp chongo $
+# @(#) $Revision: 1.4 $
+# @(#) $Id: savelog.pl,v 1.4 2000/01/21 16:21:05 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -78,7 +78,7 @@
 #
 #	/a/path/OLD
 #
-#	[[ The ``-a OLDname'' can rename OLD to another so long as 
+#	[[ The ``-a OLDname'' can rename OLD to another so long as
 #	   it is directly under the same directory as the file. ]]
 #
 # The archived and compressed (gziped) cycle of the file have names such as:
@@ -92,9 +92,9 @@
 # because on the first cycle, it is possible that some process still
 # had the file opened for writing and later flushed its buffers into it.
 #
-#	[[ NOTE: The timestamps are determined by POSIX P1003.1 ``seconds 
+#	[[ NOTE: The timestamps are determined by POSIX P1003.1 ``seconds
 #	   since the the Epoch'' which is effectively the number of 1 second
-#	   intervals since 1970-01-01 00:00:00 UTC epoch not counting 
+#	   intervals since 1970-01-01 00:00:00 UTC epoch not counting
 #	   leap seconds. ]]
 #
 ###
@@ -239,8 +239,8 @@
 #	   if one does not exist already.  If savelog cannot do this, then
 #	   savelog will refuse to run.
 #
-#	   If one does create the archive symlink, it is recommended that 
-#	   any previously gziped and indexed files be moved into the new 
+#	   If one does create the archive symlink, it is recommended that
+#	   any previously gziped and indexed files be moved into the new
 #	   archive directory.  This is because savelog will ignore any
 #	   gziped files directly under OLD when the archive symlink exists.
 #
@@ -275,7 +275,7 @@
 #		+ If /a/path/OLD does not exist and we cannot create it
 #		  as a writable directory, we will abort.
 #		+ If /a/path/OLD/archive exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we 
+#		  or a symlink that points to a writable directory or we
 #		  will abort.
 #
 #	     * case -a FOO and no -A:
@@ -284,7 +284,7 @@
 #		+ If /a/path/FOO does not exist and we cannot create it
 #		  as a writable directory, we will abort.
 #		+ If /a/path/FOO/archive exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we 
+#		  or a symlink that points to a writable directory or we
 #		  will abort.
 #
 #	     * case -A /some/path:
@@ -293,7 +293,7 @@
 #		+ If /a/path/OLD does not exist and we cannot create it
 #		  as a writable directory, we will abort.
 #		+ If /some/path exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we 
+#		  or a symlink that points to a writable directory or we
 #		  will abort.
 #		+ If /some/path not exist and we cannot create it
 #		  as a writable directory, we will abort.
@@ -309,7 +309,7 @@
 #		+ If /a/path/FOO does not exist and we cannot create it
 #		  as a writable directory, we will abort.
 #		+ If /some/path exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we 
+#		  or a symlink that points to a writable directory or we
 #		  will abort.
 #		+ If /some/path not exist and we cannot create it
 #		  as a writable directory, we will abort.
@@ -351,7 +351,7 @@
 #		      and the file is empty.
 #
 #	2) Remove all but the newest count-1 cycles and, if they exist
-#	   unless count is 0.  Remove any index file that is not associated 
+#	   unless count is 0.  Remove any index file that is not associated
 #	   with a (non-removed) file.  Files are removed from under /a/path/OLD
 #	   or from under /a/path/OLD/archive if archive exists.
 #
@@ -369,7 +369,7 @@
 #		      /a/path/OLD/file.tstamp exist.
 #
 #	4) Gzip the all files of the form: /a/path/OLD/file.tstamp1-tstamp2
-#	   unless -t was given.   Files will be placed under /a/path/OLD or 
+#	   unless -t was given.   Files will be placed under /a/path/OLD or
 #	   /a/path/OLD/archive if -A was given.  If -t was given, then
 #	   no files will be gziped.
 #
@@ -395,7 +395,7 @@
 #
 #	   Assertion: /a/path/file exists with the proper mode, uid and gid.
 #
-#	   Assertion: The file /a/path/OLD/file.tstamp (referred to in 
+#	   Assertion: The file /a/path/OLD/file.tstamp (referred to in
 #		      step 6) exists and is not had linked to /a/path/file.
 #
 #	9) The file /a/path/OLD/file.tstamp (referred to in step 6) is
@@ -430,25 +430,34 @@
 # requirements
 #
 use strict;
+use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c $opt_n
 	    $opt_n $opt_z $opt_T $opt_l $opt_v
 	    $opt_i $opt_I $opt_a $opt_A);
 use Getopt::Std;
+$ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
+$ENV{IFS} = " \t\n";
+$ENV{SHELL} = "/bin/sh";
+delete $ENV{ENV};
+use Cwd;
+use File::Basename;
 
 # my vars
 #
 my $usage;		# usage message
 my $file_mode;		# set files to this mode
 my $archive_mode;	# set archived files to this mode
+my $archdir_mode;	# mode for the OLD and archive directories
 my $file_uid;		# file owner or undefined
 my $file_gid;		# group owner or undefined
 my $cycle;		# number of cycles to keep in archive
 my $verbose;		# defined if verbose DEBUG mode is on
 my $indx_prog;		# indexing program of undefined
-my $old_name;		# name of the OLD directory
+my $oldname;		# name of the OLD directory
 my $archive_dir;	# where the archive symlink should point
 #
 my $exit_val;		# how we will exit
+my $cwd;		# initial current working directory
 
 # setup
 #
@@ -478,28 +487,32 @@ MAIN:
 {
     # my vars
     #
-    my $file;		# the current file we are processing
+    my $filename;	# the current file we are processing
+    my $dir;		# preped directory in which $filename resides
+    my $file;		# basename of $filename
+    my $gz_dir;		# where .gz files are to be placed
+
+    # setup
+    #
+    $exit_val = 0;	# hope for the best
+    $cwd = cwd();
 
     # parse args
     #
-    $exit_val = 0;	# hope for the best
     &parse();
 
     # process each file
     #
-    foreach $file (@ARGV) {
-	
-	# pre-check file
+    foreach $filename (@ARGV) {
+
+	# prepare to process the file
 	#
 	print "\n" if $verbose;
-	if (! -f $file) {
-	    &warning(20, "cannot read: $file, skipping");
-	    next;
-	}
+	next unless &prepfile($filename, \$dir, \$file, \$gz_dir);
 
-	# process the file
+	# archive the file
 	#
-	&savelog($file);
+	&archive($filename, $dir, $file, $gz_dir);
     }
 
     # all done
@@ -514,19 +527,19 @@ MAIN:
 # usage:
 #	&error(exitcode, "error format" [,arg ...])
 #
-sub error($$$)
+sub error($$@)
 {
     # parse args
     #
-    my ($code, $fmt, $args) = @_;
+    my ($code, $fmt, @args) = @_;
     $fmt = "<<no error message given>>" unless defined $fmt;
-    $code = 1 unless defined $code;
+    $code = 2 unless defined $code;
 
     # issue message
     #
     print STDERR "$0: ERROR: ";
-    if (defined $args) {
-    	printf STDERR $fmt, $args;
+    if (defined @args) {
+    	printf STDERR $fmt, @args;
     } else {
     	print STDERR $fmt;
     }
@@ -548,19 +561,19 @@ sub error($$$)
 #
 # NOTE: Unlike
 #
-sub warning($$$)
+sub warning($$@)
 {
     # parse args
     #
-    my ($code, $fmt, $args) = @_;
+    my ($code, $fmt, @args) = @_;
     $fmt = "<<no warning message given>>" unless defined $fmt;
-    $code = 1 unless defined $code;
+    $code = 3 unless defined $code;
 
     # issue message
     #
     print STDERR "$0: Warn: ";
-    if (defined $args) {
-    	printf STDERR $fmt, $args;
+    if (defined @args) {
+    	printf STDERR $fmt, @args;
     } else {
     	print STDERR $fmt;
     }
@@ -603,7 +616,7 @@ sub parse()
     $indx_type = undef;
     $indx_dir = "/usr/local/lib/savelog";
     $indx_prog = undef;
-    $old_name = "OLD";
+    $oldname = "OLD";
     $archive_dir = undef;
 
     # parse args
@@ -617,19 +630,30 @@ sub parse()
     #
     $verbose = $opt_v if defined $opt_v;
     print "DEBUG: verbose mode: set\n" if $verbose;
+    print "DEBUG: current directory: $cwd\n" if $verbose;
 
     # -m mode
     #
     $file_mode = oct($opt_m) if defined $opt_m;
     if ($file_mode != 0644 && $verbose) {
-	printf "DEBUG: using non-default file mode: 0%o\n", $file_mode;
+	printf "DEBUG: using non-default file mode: 0%03o\n", $file_mode;
     }
 
     # -M mode
     #
     $archive_mode = oct($opt_M) if defined $opt_M;
     if ($archive_mode != 0444 && $verbose) {
-	printf "DEBUG: using non-default archive mode: 0%o\n", $archive_mode;
+	printf "DEBUG: non-default archive mode: 0%03o\n", $archive_mode;
+    	$archdir_mode = 0700;
+	if (($archive_mode & 0060) != 0) {
+	    $archdir_mode |= (($archive_mode & 0060) | 0010);
+	}
+	if (($archive_mode & 0006) != 0) {
+	    $archdir_mode |= (($archive_mode & 0006) | 0001);
+	}
+	printf "DEBUG: non-default archive dir mode: 0%03o\n", $archdir_mode;
+    } else {
+    	$archdir_mode = 0755;
     }
 
     # -o owner
@@ -637,7 +661,7 @@ sub parse()
     if (defined($opt_o)) {
 	$file_uid = getpwnam($opt_o) if defined $opt_o;
 	if (!defined($file_uid)) {
-	    &error(2, "no such user: $opt_o");
+	    &error(4, "no such user: $opt_o");
 	}
 	print "DEBUG: set file uid: $file_uid\n" if $verbose;
     }
@@ -647,7 +671,7 @@ sub parse()
     if (defined($opt_g)) {
 	$file_gid = getgrnam($opt_g) if defined $opt_g;
 	if (!defined($file_gid)) {
-	    &error(3, "no such group: $opt_g");
+	    &error(5, "no such group: $opt_g");
 	}
 	print "DEBUG: set file uid: $file_gid\n" if $verbose;
     }
@@ -656,7 +680,7 @@ sub parse()
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	&error(4, "cycles to keep: $cycle must be >= 0");
+	&error(6, "cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -664,10 +688,10 @@ sub parse()
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    &error(5, "index type may not contain /, ~, *, ?, or [");
+	    &error(7, "index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    &error(6, "index type type may not be . or ..");
+	    &error(8, "index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -676,17 +700,17 @@ sub parse()
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    &error(7, "use of -I typedir requires -i indx_type");
+	    &error(9, "use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    &error(8, "no such index type directory: $opt_I");
+	    &error(10, "no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    &error(9, "index type prog: $indx_type not found in: $indx_dir");
+	    &error(11, "index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
 	print "DEBUG: indexing prog: $indx_prog\n" if $verbose;
@@ -694,22 +718,22 @@ sub parse()
 
     # -a OLDname
     #
-    $old_name = $opt_a if defined $opt_a;
-    if ($old_name =~ m:[/~*?[]:) {
-	&error(10, "OLD dir name may not contain /, ~, *, ?, or [");
+    $oldname = $opt_a if defined $opt_a;
+    if ($oldname =~ m:[/~*?[]:) {
+	&error(12, "OLD dir name may not contain /, ~, *, ?, or [");
     }
-    if ($old_name eq "." || $old_name eq "..") {
-	&error(11, "OLD dir name may not be . or ..");
+    if ($oldname eq "." || $oldname eq "..") {
+	&error(13, "OLD dir name may not be . or ..");
     }
-    if ($old_name ne "OLD" && $verbose) {
-	print "DEBUG: using non-default OLD name: $old_name\n" if $verbose;
+    if ($oldname ne "OLD" && $verbose) {
+	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
     }
 
     # -A archive_dir
     #
     if (defined $opt_A) {
 	if (! -d $opt_A) {
-	    &error(12, "archive directory not found: $opt_A");
+	    &error(14, "archive directory not found: $opt_A");
 	}
 	$archive_dir = $opt_A;
 	print "DEBUG: archive directory: $archive_dir\n" if $verbose;
@@ -722,15 +746,235 @@ sub parse()
 }
 
 
-# savelog - archive a file
+# prepfile - prepaire archive a file
 #
-sub savelog($)
+# usage:
+#	&prepfile($filename, \$dir_p, \$file_p, \$gz_dir_p)
+#
+#	$filename	path of preped filename to archive
+#	\$dir_p		ref to preped directory of $filename
+#	\$file_p	ref to basename of $filename
+#	\$gz_dir_p	ref to where .gz files are to be placed
+#
+# returns:
+#	0 ==> prep was unsuccessful
+#	1 ==> prep was successful
+#
+sub prepfile($\$\$\$)
 {
-    # parse args
+    # my vars
     #
-    my $file = $_[0];	# file name to save
+    my ($filename, $dir_p, $file_p, $gz_dir_p) = @_;	# parse args
+    my $dir;			# dirname of $filename (dir where file exists)
+    my $file;			# basename of $filename (file within $dir)
+    my $gz_dir;			# directory where .gz files are kept
+    my $mode;			# stated mode of a file or directory
+    my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
 
-    # archvie setup
+    # untaint the filename
     #
-    print "DEBUG: starting to process: $file\n" if $verbose;
+    if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+    	$filename = $1;
+    } else {
+	&warning(15, "filename has dangerious chars: %s, skipping %s",
+		 $filename, $filename);
+	return 0;
+    }
+    print "DEBUG: starting to process: $filename\n" if $verbose;
+
+    # determine, untaint and cd to the file's directory
+    #
+    $dir = dirname($filename);
+    if ($dir !~ m:^/:) {
+    	if ($dir eq ".") {
+	    $dir = $cwd;
+	} else {
+	    $dir = "$cwd/$dir";
+	}
+    }
+    if ($dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+    	$dir = $1;
+    } else {
+	&warning(16, "file directory has dangerious chars: %s, skipping %s",
+		 $dir, $filename);
+	return 0;
+    }
+    if (! chdir($dir)) {
+    	&warning(17, "cannot cd to $dir, skipping $filename");
+	return 0;
+    }
+    print "DEBUG: working directory: $dir\n" if $verbose;
+
+    # make sure that the OLD directory exists
+    #
+    if (! -d $oldname) {
+	if (! mkdir($oldname, $archdir_mode)) {
+	    &warning(18, "cannot mkdir: $dir/$oldname, skipping $filename");
+	    return 0;
+	} else {
+	    print "DEBUG: created $dir/$oldname\n" if $verbose;
+	}
+    }
+
+    # If we were asked to use an archive subdir of OLD, be sure that it exists,
+    # is in the right location, has the right mode and is writable
+    #
+    if (defined($archive_dir)) {
+
+        # untaint archive_dir
+	#
+	if ($archive_dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	    $archive_dir = $1;
+	} else {
+	    &error(19, "archive dir has dangerious chars: $archive_dir");
+	}
+
+	# The archive directory must exist
+	#
+	if (! -d $archive_dir) {
+	    &error(20, "archive dir: $archive_dir is not a directory");
+
+	# If we have an OLD/archive is a symlink, make it point to archive_dir
+	#
+	} elsif (-l "$oldname/archive") {
+
+	    # determine if OLD/archive points to archive_dir
+	    #
+	    ($dev1, $inum1, undef) = stat("$oldname/archive");
+	    ($dev2, $inum2, undef) = stat($archive_dir);
+	    if (!defined($dev2) || !defined($inum2)) {
+	    	&error(21, "cannot stat archive dir: $archive_dir");
+	    }
+	    if (!defined($dev1) || !defined($inum1) ||
+	    	$dev1 != $dev2 || $inum1 != $inum2) {
+
+		# OLD/archive points to a different place (or nowhere), so
+		# we must remove it and form it as a symlink to archive_dir
+		#
+		if (!unlink("$oldname/archive") ||
+		    !symlink($archive_dir, "$oldname/archive")) {
+		    &warning(22, "cannot symlink %s to %s, skipping %s",
+		    	     "$oldname/archive", $archive_dir, $filename);
+		    return 0;
+		}
+		printf("DEBUG: symlink %s to %s\n", 
+		       "$oldname/archive", $archive_dir) if $verbose;
+	    }
+
+	} elsif (-d "$oldname/archive") {
+
+	    # determine if OLD/archive points to archive_dir
+	    #
+	    ($dev1, $inum1, undef) = stat("$oldname/archive");
+	    ($dev2, $inum2, undef) = stat($archive_dir);
+	    if (!defined($dev2) || !defined($inum2)) {
+	    	&error(23, "can't stat archive dir: $archive_dir");
+	    }
+	    if (!defined($dev1) || !defined($inum1) ||
+	    	$dev1 != $dev2 || $inum1 != $inum2) {
+	    	&warning(24, "%s is a directory and is not %s",
+			     "$oldname/archive", $archive_dir, $filename);
+	    	return 0;
+	    }
+
+	# No OLD/archive exists, so make is a symlink to archive_dir
+	#
+	} else {
+
+	    # make OLD/archive a symlink to the archive_dir
+	    #
+	    if (!symlink($archive_dir, "$oldname/archive")) {
+		&warning(25, "can't symlink %s to %s, skipping %s",
+			 "$oldname/archive", $archive_dir, $filename);
+		return 0;
+	    }
+	    printf("DEBUG: symlinked %s to %s\n", 
+		   "$oldname/archive", $archive_dir) if $verbose;
+	}
+	$gz_dir = "$dir/$oldname/archive";
+
+    # If we were not asked to use an archive subdir of OLD but one
+    # exists anyway, be sure it has the right mode and is writable
+    #
+    } elsif (-d "$oldname/archive") {
+
+	# archive is a directory, so OLD/archive is the .gz directory
+	#
+	$gz_dir = "$dir/$oldname/archive";
+
+    } else {
+
+	# no archive directory, so OLD is the .gz directory
+	#
+	$gz_dir = "$dir/$oldname";
+    }
+    print "DEBUG: .gz directory: $gz_dir\n" if $verbose;
+
+    # be sure that OLD, and if needed OLD/archive has the right modes
+    #
+    (undef, undef, $mode, undef) = stat($oldname);
+    $mode &= 07777;
+    if ($mode != $archdir_mode) {
+	if (chmod($archdir_mode, $oldname)) {
+	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
+	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
+	} else {
+	    &warning(26, "unable to chmod 0%03o OLD directory: %s, skipping %s",
+			 $archdir_mode, "$dir/$oldname", $filename);
+	    return 0;
+	}
+    }
+    if (! -w $oldname) {
+	&warning(27, "OLD directory: %s is not writable, skipping %s",
+		     "$dir/$oldname", $filename);
+    	return 0;
+    }
+    #
+    if ($gz_dir ne $oldname) {
+	(undef, undef, $mode, undef) = stat($gz_dir);
+	$mode &= 07777;
+	if ($mode != $archdir_mode) {
+	    if (chmod($archdir_mode, $gz_dir)) {
+		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
+		       $gz_dir, $mode, $archdir_mode) if $verbose;
+	    } else {
+		&warning(28,
+		    "unable to chmod 0%03o archive directory: %s, skipping %s",
+		    $archdir_mode, $gz_dir, $filename);
+		return 0;
+	    }
+	}
+	if (! -w $gz_dir) {
+	    &warning(29, "archive directory: %s is not writable, skipping %s",
+			 $gz_dir, $filename);
+	    return 0;
+	}
+    }
+
+    # ensure that the base filename exists
+    #
+    $file = basename($filename);
+    print "DEBUG: filename: $file\n" if $verbose;
+
+    # return dir, file, gz_dir and success
+    #
+    $$dir_p = $dir;
+    $$file_p = $file;
+    $$gz_dir_p = $gz_dir;
+    return 1;
+}
+
+
+# archive - archive a file
+#
+# usage:
+#	&archive($filename, $dir, $file, $gz_dir)
+#
+#	$filename	path of preped filename to archive
+#	$dir		preped directory of $filename
+#	$file		basename of $filename
+#	$gz_dir		where .gz files are to be placed
+#
+sub archive($$$$)
+{
 }
