@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.8 $
-# @(#) $Id: savelog.pl,v 2.8 2002/01/11 02:02:47 root Exp chongo $
+# @(#) $Revision: 3.1 $
+# @(#) $Id: savelog.pl,v 3.1 2002/10/02 03:40:07 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
@@ -52,7 +52,7 @@
 #	-i type	   - form index files of a given type (def: don't)
 #	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
 #	-a OLD	   - OLD directory name (not a path) (def: OLD)
-#	-A archive - form archive symlink for gzip files (def: don't)
+#	-A archive - sub-directory under OLD to place files beyond cycle 1
 #
 # 	savelog [... same flags as above ...] -R dir ...
 #
@@ -217,13 +217,15 @@
 #
 ###
 #
+# On the use of '-A archive':
+#
 # It is possible to preserve space in the file's filesystem by placing
 # gziped files into another directory.  If the OLD directory contains a
 # symlink named 'archive':
 #
 #	/a/path/OLD/archive -> /b/history/directory
 #
-# then files will be gziped into the path:
+# and '-A archive' is given, then files will be gziped into the path:
 #
 #	/a/path/OLD/archive/file.948209998-948296401.gz
 #
@@ -231,11 +233,9 @@
 #
 #	/b/history/directory/file.948209998-948296401.gz
 #
-# 	NOTE: The '-A archive' file will cause the archive symlink.
-#	      to be created (or changed if it existed previously).  Savelog
-#	      will create a directory where the archive symlink points
-#	      if one does not exist already.  If savelog cannot do this,
-#	      then savelog will refuse to run.
+# NOTE: The cycle 1 file will never be placed under OLD/archive.  Only
+#	files beyold cycle 1 will be placed under OLD/archive when
+#	-A archive is given.
 #
 ###
 #
@@ -294,56 +294,38 @@
 #		  or we will abort.
 #		+ If /a/path/OLD does not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /a/path/OLD/archive exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we
-#		  will abort.
 #
 #	     * case -a FOO and no -A:
 #		+ If /a/path/FOO exists, it must be a writable directory
 #		  or we will abort.
 #		+ If /a/path/FOO does not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /a/path/FOO/archive exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we
-#		  will abort.
 #
-#	     * case -A /some/path:
+#	     * case no -a and -A archive:
 #		+ If /a/path/OLD exists, it must be a writable directory
 #		  or we will abort.
 #		+ If /a/path/OLD does not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /some/path exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we
-#		  will abort.
-#		+ If /some/path not exist and we cannot create it
+#		+ If /a/path/OLD/name exists, it must be a writable directory
+#		  or we will abort.
+#		+ If /a/path/OLD/name not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /a/path/OLD/archive exists and is not a symlink,
-#		  we will abort.
-#		+ If /a/path/OLD/archive is a symlink and we cannot replace
-#		  it with a symlink that points the /some/path directory
-#		  then we will abort.
 #
-#	     * case -a FOO and -A /some/path:
+#	     * case -a FOO and -A archive:
 #		+ If /a/path/FOO exists, it must be a writable directory
 #		  or we will abort.
 #		+ If /a/path/FOO does not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /some/path exists, it must be a writable directory
-#		  or a symlink that points to a writable directory or we
-#		  will abort.
-#		+ If /some/path not exist and we cannot create it
+#		+ If /a/path/FOO/name exists, it must be a writable directory
+#		  or we will abort.
+#		+ If /a/path/FOO/name not exist and we cannot create it
 #		  as a writable directory, we will abort.
-#		+ If /a/path/FOO/archive exists and is not a symlink,
-#		  we will abort.
-#		+ If /a/path/FOO/archive is a symlink and we cannot replace
-#		  it with a symlink that points the /some/path directory
-#		  then we will abort.
 #
-#	    * case -i indx_type and no -I:
+#	     * case -i indx_type and no -I:
 #		+ /usr/local/lib/savelog/indx_type must be an executable
 #		  file or we will abort.
 #
-#	    * case -i indx_type and -I /indx/prog/dir:
+#	     * case -i indx_type and -I /indx/prog/dir:
 #		+ /indx/prog/dir/indx_type must be an executable
 #		  file or we will abort.
 #
@@ -490,7 +472,7 @@ my $cycle;		# number of cycles to keep in archive
 my $verbose;		# defined if verbose DEBUG mode is on
 my $indx_prog;		# indexing program of undefined
 my $oldname;		# name of the OLD directory
-my $archive_dir;	# where the archive symlink should point
+my $archive_name;	# files beyond cycle 1 under OLD/archive_name
 #
 my $exit_val;		# how we will exit
 my $gzip_prog;		# location of the gzip program
@@ -523,7 +505,7 @@ $usage = "usage:\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
 	 "\t-a OLD\t\t OLD directory name (not a path) (def: OLD)\n" .
-	 "\t-A archive\t form archive symlink for gzip files (def: don't)\n" .
+	 "\t-A archive\t files beyond cycle 1 under OLD/archive (def: OLD)\n" .
 	 "\t\n" .
 	 "$0 [... same flags as above ...] -R dir ...\n" .
 	 "\t\n" .
@@ -549,7 +531,7 @@ sub split_list(@);
 sub rm_cycles(@@);
 sub gzip_or_move($$$$);
 sub hard_link($$);
-sub archive($$$$);
+sub archive($$$);
 
 # main
 #
@@ -744,9 +726,9 @@ sub walk_dir($)
 
     # ignore files ending in .gz, .indx or .new
     #		   starting with .
-    #	     	   that match m#\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$#
+    #	     	   that match m#\.\d{9,10}\-\d{9,10}$#
     #
-    if ($name =~ /\.gz$|\.indx$|\.new$|^\.|\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$/) {
+    if ($name =~ /\.gz$|\.indx$|\.new$|^\.|\.\d{9,10}\-\d{9,10}$/) {
 	print "DEBUG: walk_dir: ignoring file: $File::Find::name\n"
 		if $verbose;
 	return;
@@ -775,7 +757,6 @@ sub process_file($)
     my $status;			# subroutine return status
     my $dir;			# prep directory in which $file resides
     my $gz_dir;			# where .gz files are to be placed
-    my $have_archive;		# TRUE => we have an OLD/archive dir
 
     # prepare to process the file
     #
@@ -786,14 +767,15 @@ sub process_file($)
 	print "\nDEBUG: starting with: $file\n\n" if $verbose;
 	print "\n# starting with: $file\n\n" if defined $opt_n;
     }
-    if (! (($status, $dir, $gz_dir, $have_archive) = prep_file($file)) ) {
+    ($status, $dir, $gz_dir) = prep_file($file);
+    if (! defined $status || ! defined $dir || ! defined $gz_dir) {
 	print STDERR "error while preparing for $file, skipping\n";
 	return;
     }
 
     # archive the file
     #
-    if (! archive($file, $dir, $gz_dir, $have_archive)) {
+    if (! archive($file, $dir, $gz_dir)) {
 	print STDERR "error while processing $file\n";
 	return;
     }
@@ -838,7 +820,7 @@ sub parse()
     $indx_dir = "/usr/local/lib/savelog";
     $indx_prog = undef;
     $oldname = "OLD";
-    $archive_dir = undef;
+    $archive_name = undef;
 
     # parse args
     #
@@ -977,11 +959,17 @@ sub parse()
 	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
     }
 
-    # -A archive_dir
+    # -A archive_name
     #
     if (defined $opt_A) {
-	$archive_dir = $opt_A;
-	print "DEBUG: archive directory: $archive_dir\n" if $verbose;
+	if (defined $opt_A =~ m:/:) {
+	    $archive_name = $opt_A;
+	    print "DEBUG: archive name: $archive_name\n" if $verbose;
+	} elsif ($opt_A eq "." || $opt_A eq "..") {
+	    err_msg(16, "-A name cannot be . or ..");
+	} else {
+	    err_msg(17, "-A name cannot contain /'s");
+	}
     }
 
     # must have at least one arg
@@ -1018,7 +1006,7 @@ sub untaint($)
 # prep_file - prepare archive a file
 #
 # usage:
-#	($status, $dir, $gz_dir, $have_archive) = prep_file($file);
+#	($status, $dir, $gz_dir) = prep_file($file);
 #
 #	$file			path of prep file to archive
 #
@@ -1028,7 +1016,6 @@ sub untaint($)
 #	1 ==> prep was successful or -n
 #    $dir		ref to prep directory of $file
 #    $gz_dir		ref to where .gz files are to be placed
-#    $have_archive	TRUE => we have an OLD/archive and '-A archive' given
 #
 sub prep_file($)
 {
@@ -1037,8 +1024,8 @@ sub prep_file($)
     my ($file) = @_;		# parse args
     my $dir;			# dirname of $file (dir where file exists)
     my $gz_dir;			# directory where .gz files are kept
-    my $have_archive;		# TRUE => we have an OLD/archive and -A given
     my $mode;			# stated mode of a file or directory
+    my $archive_dir;		# full path of OLD/archive directory
     my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
 
     # determine the file's directory
@@ -1049,22 +1036,13 @@ sub prep_file($)
     # untaint the file
     #
     $file = untaint($file);
-    if (defined $opt_n) {
-	if (defined($archive_dir)) {
-	    $gz_dir = "$dir/$oldname/archive";
-	    print "# prep_file for file: $file  gz_dir: $gz_dir\n";
-	    return (1, $dir, $gz_dir, $true);
-	} else {
-	    $gz_dir = "$dir/$oldname";
-	    print "# prep_file for file: $file  gz_dir: $gz_dir\n";
-	    return (1, $dir, $gz_dir, $false);
-	}
-    }
 
     # make sure that the OLD directory exists
     #
     if (! -d "$dir/$oldname") {
-	if (mkdir("$dir/$oldname", $archdir_mode)) {
+	if (defined $opt_n) {
+	    print "mkdir $dir/$oldname\n";
+	} elsif (mkdir("$dir/$oldname", $archdir_mode)) {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
 	} else {
 	    err_msg(17, "cannot mkdir: $dir/$oldname: $!");
@@ -1074,91 +1052,32 @@ sub prep_file($)
     # If we were asked to use an archive subdir of OLD, be sure that it exists,
     # is in the right location, has the right mode and is writable
     #
-    if (defined($archive_dir)) {
+    if (defined($archive_name)) {
 
         # untaint archive_dir
 	#
-	$archive_dir = untaint($archive_dir);
+	$archive_dir = "$dir/$oldname/" . untaint($archive_name);
 
-	# The archive directory must exist
+	# create archive directory if it does not exist
 	#
 	if (! -d $archive_dir) {
-	    err_msg(18,
-	    	"prep_file: archive dir: $archive_dir is not a directory");
-
-	# If we have an OLD/archive is a symlink, make it point to archive_dir
-	#
-	} elsif (-l "$dir/$oldname/archive") {
-
-	    # determine if OLD/archive points to archive_dir
-	    #
-	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
-	    ($dev2, $inum2, undef) = stat($archive_dir);
-	    if (!defined($dev2) || !defined($inum2)) {
-	    	err_msg(19, "prep_file: bad stat archive dir: $archive_dir");
+	    if (defined $opt_n) {
+		print "mkdir $archive_dir\n";
+	    } elsif (mkdir("$archive_dir", $archdir_mode)) {
+		print "DEBUG: created $archive_dir\n" if $verbose;
+	    } else {
+		err_msg(17, "cannot mkdir: $archive_dir: $!");
 	    }
-	    if (!defined($dev1) || !defined($inum1) ||
-	    	$dev1 != $dev2 || $inum1 != $inum2) {
-
-		# OLD/archive points to a different place (or nowhere), so
-		# we must remove it and form it as a symlink to archive_dir
-		#
-		if (!rm("$dir/$oldname/archive", "about to symlink") ||
-		    !symlink($archive_dir, "$dir/$oldname/archive")) {
-		    warn_msg(20,
-			"cannot symlink $dir/$oldname/archive to $archive_dir");
-		    return ($false, undef, undef, undef);
-		}
-		printf("DEBUG: symlink %s to %s\n",
-		       "$dir/$oldname/archive", $archive_dir) if $verbose;
-	    }
-
-	} elsif (-d "$dir/$oldname/archive") {
-
-	    # determine if OLD/archive points to archive_dir
-	    #
-	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
-	    ($dev2, $inum2, undef) = stat($archive_dir);
-	    if (!defined($dev2) || !defined($inum2)) {
-	    	err_msg(21, "prep_file: can't stat archive dir: $archive_dir");
-	    }
-	    if (!defined($dev1) || !defined($inum1) ||
-	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	warn_msg(22,
-		    "$dir/$oldname/archive is a dir and is not $archive_dir");
-	    	return ($false, undef, undef, undef);
-	    }
-
-	# No OLD/archive exists, so make is a symlink to archive_dir
-	#
-	} else {
-
-	    # make OLD/archive a symlink to the archive_dir
-	    #
-	    if (!symlink($archive_dir, "$dir/$oldname/archive")) {
-		warn_msg(23,
-		    "cannot symlink $dir/$oldname/archive to $archive_dir");
-		return ($false, undef, undef, undef);
-	    }
-	    printf("DEBUG: symlinked %s to %s\n",
-		   "$dir/$oldname/archive", $archive_dir) if $verbose;
 	}
-	$gz_dir = "$dir/$oldname/archive";
-	$have_archive = $true;
+	$gz_dir = $archive_dir;
 
     } else {
 
 	# no archive directory, so OLD is the .gz directory
 	#
 	$gz_dir = "$dir/$oldname";
-	$have_archive = $false;
     }
     print "DEBUG: .gz directory: $gz_dir\n" if $verbose;
-    if ($have_archive) {
-	print "DEBUG: have_archive: TRUE\n" if $verbose;
-    } else {
-	print "DEBUG: have_archive: FALSE\n" if $verbose;
-    }
 
     # be sure that OLD, and if needed OLD/archive has the right modes
     #
@@ -1171,12 +1090,12 @@ sub prep_file($)
 	} else {
 	    warn_msg(24, "unable to chmod 0%03o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
-	    return ($false, undef, undef, undef);
+	    return ($false, undef, undef);
 	}
     }
     if (! -w "$dir/$oldname") {
 	warn_msg(25, "OLD directory: $dir/$oldname is not writable");
-    	return ($false, undef, undef, undef);
+    	return ($false, undef, undef);
     }
     #
     if ($gz_dir ne "$dir/$oldname") {
@@ -1189,18 +1108,18 @@ sub prep_file($)
 	    } else {
 		warn_msg(26, "unable to chmod 0%03o archive directory: %s",
 		    $archdir_mode, $gz_dir);
-		return ($false, undef, undef, undef);
+		return ($false, undef, undef);
 	    }
 	}
 	if (! -w $gz_dir) {
 	    warn_msg(27, "archive directory: $gz_dir is not writable");
-	    return ($false, undef, undef, undef);
+	    return ($false, undef, undef);
 	}
     }
 
-    # return dir, file, gz_dir and success
+    # return dir, file, and gz_dir
     #
-    return ($true, $dir, $gz_dir, $have_archive);
+    return ($true, $dir, $gz_dir);
 }
 
 
@@ -2030,12 +1949,11 @@ sub hard_link($$)
 # archive - archive a file
 #
 # usage:
-#	archive($file, $dir, $gz_dir, $have_archive)
+#	archive($file, $dir, $gz_dir)
 #
 #	$file		path of prep file to archive
 #	$dir		prep directory of $file
 #	$gz_dir		where .gz files are to be placed
-#	$have_archive	TRUE => we have an OLD/archive directory
 #
 # returns:
 #	0 ==> archive was unsuccessful
@@ -2043,9 +1961,9 @@ sub hard_link($$)
 #
 # NOTE: It is assumed that our currently directory has been set to $dir.
 #
-sub archive($$$$)
+sub archive($$$)
 {
-    my ($file, $dir, $gz_dir, $have_archive) = @_;	# get args
+    my ($file, $dir, $gz_dir) = @_;	# get args
     my $list;		# @{$list} of archived files
     my $gz;		# @{$files} of the form file\.\d{9,10}\-\d{9,10}\.gz
     my $plain;		# @{$files} of the form file\.\d{9,10}\-\d{9,10}
@@ -2151,15 +2069,15 @@ sub archive($$$$)
 
 	    # gzip or move files in place
 	    #
-	    if (! $have_archive || $$plain[$i] =~ m#/archive/[^/]+$#) {
+	    if (! defined $archive_name || $$plain[$i] =~ m#/archive/[^/]+$#) {
 
 		# gzip the file in place
 		gzip_or_move($$plain[$i], $need_gzip, $true, $gz_dir);
 
 	    # gzip the file into the archive dir
 	    #
-	    # If '-A archive' was given ($have_archive TRUE) so files will
-	    # be gziped into the $gz_dir (which is under OLD/archive);
+	    # If '-A archive' was given then, files will be gziped into
+	    # the $gz_dir (which is under OLD/archive);
 	    #
 	    } else {
 
@@ -2242,7 +2160,7 @@ sub archive($$$$)
     # step 8 - If -1 was given, the gzip /a/path/OLD/file.tstamp-now
     #
     if (defined $opt_1) {
-	if ($have_archive) {
+	if (defined $archive_name) {
 	    gzip_or_move($old_file, $need_gzip, $false, $gz_dir);
 	} else {
 	    gzip_or_move($old_file, $need_gzip, $true, $gz_dir);
