@@ -2,8 +2,8 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.5 $
-# @(#) $Id: Makefile,v 1.5 2000/06/13 20:31:27 chongo Exp chongo $
+# @(#) $Revision: 1.6 $
+# @(#) $Id: Makefile,v 1.6 2000/06/13 20:36:08 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -36,7 +36,7 @@ SHELL=/bin/sh
 DESTDIR=/usr/local/etc
 LIBDIR=/usr/local/lib
 DESTLIB=${LIBDIR}/savelog
-WEBDIR=/web/isthe/chroot/html/chongo/src/savelog
+WWWDIR=/web/isthe/chroot/html/chongo/src/savelog
 INSTALL= install
 
 INDX_PROG= mail
@@ -60,13 +60,25 @@ install: all
 	    chmod 0755 ${DESTLIB}; \
 	fi
 	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
-	-@if [ -d "${WEBDIR}" ]; then \
-	    echo "${INSTALL} -m 0444 savelog ${WEBDIR}"; \
-	    ${INSTALL} -m 0444 savelog ${WEBDIR}; \
+	-@if [ -d "${WWWDIR}" ]; then \
+	    echo "${INSTALL} -m 0444 savelog ${WWWDIR}"; \
+	    ${INSTALL} -m 0444 savelog ${WWWDIR}; \
 	    echo "${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}"; \
 	    ${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}; \
-	    echo "${INSTALL} -m 0444 Makefile ${WEBDIR}"; \
-	    ${INSTALL} -m 0444 Makefile ${WEBDIR}; \
+	    echo "${INSTALL} -m 0444 Makefile ${WWWDIR}"; \
+	    ${INSTALL} -m 0444 Makefile ${WWWDIR}; \
+	    (echo "cd ${WWWDIR}/.."; \
+	     cd ${WWWDIR}/..; \
+	     tgz="savelog/savelog.tgz"; \
+	     files="savelog/savelog savelog/Makefile"; \
+	     for i in ${INDX_PROG}; do \
+	         files="$$files savelog/$$i"; \
+	     done; \
+	     echo "tar -zcvf $$tgz $$files"; \
+	     tar -zcvf $$tgz $$files; \
+	     echo "chmod 0444 $$tgz"; \
+	     chmod 0444 $$tgz; \
+	    ); \
 	fi
 
 clean:
