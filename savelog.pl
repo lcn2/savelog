@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.10 $
-# @(#) $Id: savelog.pl,v 1.10 2000/01/27 18:51:17 chongo Exp chongo $
+# @(#) $Revision: 1.11 $
+# @(#) $Id: savelog.pl,v 1.11 2000/01/28 20:02:45 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -519,28 +519,28 @@ $opt_n = 1;	# XXX - DEBUG
 
 # XXX - debug
 #
-# my (@list, @single, @gz, @plain, @double, @index);
-# &scandir("foo", "OLD", "OLD/archive", \@list);
-# print "scanned list\n", join("\n", @list), "\n";
-# &cleanlist(\@list);
-# print "\ncleaned list:\n", join("\n", @list), "\n";
-# &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
-# print "\nsingle list:\n", join("\n", @single), "\n";
-# print "\ngz list:\n", join("\n", @gz), "\n";
-# print "\nplain list:\n", join("\n", @plain), "\n";
-# print "\ndouble list:\n", join("\n", @double), "\n";
-# print "\nindex list:\n", join("\n", @index), "\n";
-# print "\ncycles: $cycle, double last: $#double\n";
-# if ($cycle > 0 && $#double ge $cycle-1) {
-# &rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
-# print "\nall list:\n", join("\n", @list), "\n";
-# print "\nsingle list:\n", join("\n", @single), "\n";
-# print "\ngz list:\n", join("\n", @gz), "\n";
-# print "\nplain list:\n", join("\n", @plain), "\n";
-# print "\ndouble list:\n", join("\n", @double), "\n";
-# print "\nindex list:\n", join("\n", @index), "\n";
-# }
-# exit(0);
+my (@list, @single, @gz, @plain, @double, @index);
+&scandir("foo", "OLD", "OLD/archive", \@list);
+print "scanned list\n", join("\n", @list), "\n";
+&cleanlist(\@list);
+print "\ncleaned list:\n", join("\n", @list), "\n";
+&splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
+print "\nsingle list:\n", join("\n", @single), "\n";
+print "\ngz list:\n", join("\n", @gz), "\n";
+print "\nplain list:\n", join("\n", @plain), "\n";
+print "\ndouble list:\n", join("\n", @double), "\n";
+print "\nindex list:\n", join("\n", @index), "\n";
+print "\ncycles: $cycle, double last: $#double\n";
+if ($cycle > 0 && $#double ge $cycle-1) {
+&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@index);
+print "\nall list:\n", join("\n", @list), "\n";
+print "\nsingle list:\n", join("\n", @single), "\n";
+print "\ngz list:\n", join("\n", @gz), "\n";
+print "\nplain list:\n", join("\n", @plain), "\n";
+print "\ndouble list:\n", join("\n", @double), "\n";
+print "\nindex list:\n", join("\n", @index), "\n";
+}
+exit(0);
 
     # process each file
     #
@@ -569,13 +569,12 @@ $opt_n = 1;	# XXX - DEBUG
     exit $exit_val;
 }
 
-
-# error - report an error and exit
+# err_msg - report an error and exit
 #
 # usage:
-#	&error(exitcode, "error format" [,arg ...])
+#	&err_msg(exitcode, "error format" [,arg ...])
 #
-sub error($$@)
+sub err_msg($$@)
 {
     # parse args
     #
@@ -602,14 +601,14 @@ sub error($$@)
 }
 
 
-# warning - report an problem and continue
+# warn_msg - report an problem and continue
 #
 # usage:
-#	&warning(exitcode, "warning format" [,arg ...])
+#	&warn_msg(exitcode, "warning format" [,arg ...])
 #
 # NOTE: Unlike
 #
-sub warning($$@)
+sub warn_msg($$@)
 {
     # parse args
     #
@@ -638,7 +637,6 @@ sub warning($$@)
 # parse - parse the command line args
 #
 # usage:
-#	&parse()
 #
 # NOTE: This function cannot check or process the OLD archive dir name nor the
 #	archive symlink because they are relative to the directories of each
@@ -716,11 +714,11 @@ sub parse()
 		$file_uid = getpwnam($opt_o);
 	    }
 	    if (!defined $file_uid) {
-		&error(4, "parse: bad user: $opt_o");
+		&err_msg(4, "parse: bad user: $opt_o");
 	    }
 	    print "DEBUG: set file uid: $file_uid\n" if $verbose;
         } else {
-	    &error(5, "parse: only the superuser can use -o");
+	    &err_msg(5, "parse: only the superuser can use -o");
 	}
     }
 
@@ -733,11 +731,11 @@ sub parse()
 		$file_gid = getgrnam($opt_g);
 	    }
 	    if (!defined $file_gid) {
-		&error(6, "parse: bad group: $opt_g");
+		&err_msg(6, "parse: bad group: $opt_g");
 	    }
 	    print "DEBUG: set file gid: $file_gid\n" if $verbose;
         } else {
-	    &error(7, "parse: only the superuser can use -g");
+	    &err_msg(7, "parse: only the superuser can use -g");
 	}
     }
 
@@ -745,7 +743,7 @@ sub parse()
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	&error(8, "parse: cycles to keep: $cycle must be >= 0");
+	&err_msg(8, "parse: cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -753,10 +751,10 @@ sub parse()
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    &error(9, "parse: index type may not contain /, ~, *, ?, or [");
+	    &err_msg(9, "parse: index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    &error(10, "parse: index type type may not be . or ..");
+	    &err_msg(10, "parse: index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -765,17 +763,17 @@ sub parse()
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    &error(11, "parse: use of -I typedir requires -i indx_type");
+	    &err_msg(11, "parse: use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    &error(12, "parse: no such index type directory: $opt_I");
+	    &err_msg(12, "parse: no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    &error(13,
+	    &err_msg(13,
 	    	"parse: index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
@@ -786,10 +784,10 @@ sub parse()
     #
     $oldname = $opt_a if defined $opt_a;
     if ($oldname =~ m:[/~*?[]:) {
-	&error(14, "parse: OLD dir name may not contain /, ~, *, ?, or [");
+	&err_msg(14, "parse: OLD dir name may not contain /, ~, *, ?, or [");
     }
     if ($oldname eq "." || $oldname eq "..") {
-	&error(15, "parse: OLD dir name may not be . or ..");
+	&err_msg(15, "parse: OLD dir name may not be . or ..");
     }
     if ($oldname ne "OLD" && $verbose) {
 	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
@@ -839,7 +837,7 @@ sub prepfile($\$\$\$)
     if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
     	$filename = $1;
     } else {
-	&warning(16, "filename has dangerious chars: $filename");
+	&warn_msg(16, "filename has dangerious chars: $filename");
 	return $false;
     }
     print "DEBUG: starting to process: $filename\n" if $verbose;
@@ -858,11 +856,11 @@ sub prepfile($\$\$\$)
     if ($dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
     	$dir = $1;
     } else {
-	&warning(17, "file directory has dangerious chars: $dir");
+	&warn_msg(17, "file directory has dangerious chars: $dir");
 	return $false;
     }
     if (! chdir($dir)) {
-    	&warning(18, "cannot cd to $dir");
+    	&warn_msg(18, "cannot cd to $dir");
 	return $false;
     }
     print "cd $dir\n" if defined $opt_n;
@@ -872,7 +870,7 @@ sub prepfile($\$\$\$)
     #
     if (! -d $oldname) {
 	if (! mkdir($oldname, $archdir_mode)) {
-	    &warning(19, "cannot mkdir: $dir/$oldname");
+	    &warn_msg(19, "cannot mkdir: $dir/$oldname");
 	    return $false;
 	} else {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
@@ -889,14 +887,14 @@ sub prepfile($\$\$\$)
 	if ($archive_dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	    $archive_dir = $1;
 	} else {
-	    &error(20,
+	    &err_msg(20,
 	    	"prepfile: archive dir has dangerious chars: $archive_dir");
 	}
 
 	# The archive directory must exist
 	#
 	if (! -d $archive_dir) {
-	    &error(21,
+	    &err_msg(21,
 	    	"prepfile: archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
@@ -908,7 +906,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(22, "prepfile: cannot stat archive dir: $archive_dir");
+	    	&err_msg(22, "prepfile: cannot stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -918,7 +916,7 @@ sub prepfile($\$\$\$)
 		#
 		if (!unlink("$oldname/archive") ||
 		    !symlink($archive_dir, "$oldname/archive")) {
-		    &warning(23,
+		    &warn_msg(23,
 			     "cannot symlink $oldname/archive to $archive_dir");
 		    return $false;
 		}
@@ -933,11 +931,11 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(24, "prepfile: can't stat archive dir: $archive_dir");
+	    	&err_msg(24, "prepfile: can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
-	    	&warning(25,
+	    	&warn_msg(25,
 		    "$oldname/archive is a directory and is not $archive_dir");
 	    	return $false;
 	    }
@@ -949,7 +947,8 @@ sub prepfile($\$\$\$)
 	    # make OLD/archive a symlink to the archive_dir
 	    #
 	    if (!symlink($archive_dir, "$oldname/archive")) {
-		&warning(26, "cannot symlink $oldname/archive to $archive_dir");
+		&warn_msg(26,
+		    "cannot symlink $oldname/archive to $archive_dir");
 		return $false;
 	    }
 	    printf("DEBUG: symlinked %s to %s\n",
@@ -983,13 +982,13 @@ sub prepfile($\$\$\$)
 	    printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
-	    &warning(27, "unable to chmod 0%03o OLD directory: %s",
+	    &warn_msg(27, "unable to chmod 0%03o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
 	    return $false;
 	}
     }
     if (! -w $oldname) {
-	&warning(28, "OLD directory: $dir/$oldname is not writable");
+	&warn_msg(28, "OLD directory: $dir/$oldname is not writable");
     	return $false;
     }
     #
@@ -1001,14 +1000,14 @@ sub prepfile($\$\$\$)
 		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
-		&warning(29,
+		&warn_msg(29,
 		    "unable to chmod 0%03o archive directory: %s",
 		    $archdir_mode, $gz_dir);
 		return $false;
 	    }
 	}
 	if (! -w $gz_dir) {
-	    &warning(30, "archive directory: $gz_dir is not writable");
+	    &warn_msg(30, "archive directory: $gz_dir is not writable");
 	    return $false;
 	}
     }
@@ -1141,6 +1140,60 @@ sub safe_file_create($$$$$)
 }
 
 
+# loaddir - load a list with the filenames of files found in a directory
+#
+# usage:
+#	&loaddir($dir, \@list)
+#
+#	$dir	directory to scan for files
+#	\@list	list of filenames of files found in $dir
+#
+# returns:
+#	0 ==> scan was unsuccessful
+#	1 ==> scan was successful or ignored
+#
+sub loaddir($\@)
+{
+    my ($dir, $list) = @_;	# get args
+    my $filename;		# filename found in $dir
+
+    # verify that the list arg is an array reference
+    #
+    if (!defined($list) || ref($list) ne 'ARRAY') {
+	&err_msg(31, "loaddir: 2nd argument is not an array reference");
+    }
+
+    # canonicalize the directory name
+    #
+    if ($dir !~ m:^/:) {
+    	if ($dir eq ".") {
+	    $dir = $cwd;
+	} else {
+	    $dir = "$cwd/$dir";
+	}
+    }
+
+    # prep for scanning dir
+    #
+    if (! opendir DIR, $dir) {
+	&warn_msg(32, "unable to open dir: $dir");
+	return $false;
+    }
+    $#$list = -1;
+
+    # scan dir for filenames
+    #
+    while ($filename = readdir DIR) {
+	push(@$list, "$dir/$filename") if -f "$dir/$filename";
+    }
+
+    # cleanup, all done
+    #
+    closedir DIR;
+    return $true;
+}
+
+
 # scandir - scan the OLD and possibly archive dir for archived filenames
 #
 # usage:
@@ -1172,13 +1225,13 @@ sub safe_file_create($$$$$)
 sub scandir($$$\@)
 {
     my ($filename, $olddir, $archdir, $list) = @_;	# get args
-    my @found;		# list of matching files found
+    my @filelist;	# filenames found under $dir
     my $i;
 
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&error(31, "scandir: 4th argument is not an array reference");
+	&err_msg(31, "scandir: 4th argument is not an array reference");
     }
 
     # clear the list
@@ -1187,18 +1240,11 @@ sub scandir($$$\@)
 
     # scan OLD/ for files of the form filename\.\d{10}
     #
-    if (! opendir DIR, $olddir) {
-	&warning(32, "unable to open OLD dir: $olddir");
+    if (! &loaddir($olddir, \@filelist)) {
+	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
     }
-    @found = grep /^$filename\.\d{10}$/, readdir DIR;
-    closedir DIR;
-
-    # append each found file as OLD/name in sorted order
-    #
-    foreach $i (sort @found) {
-	push(@$list, "$olddir/$i");
-    }
+    @$list = grep m#/$filename\.\d{10}$#, @filelist;
 
     # scan OLD/archive if it exists
     #
@@ -1206,18 +1252,11 @@ sub scandir($$$\@)
 
 	# scan the OLD/archive/
 	#
-	if (! opendir DIR, $archdir) {
-	    &warning(33, "cannot open OLD/archive dir: $archdir");
+	if (! &loaddir($archdir, \@filelist)) {
+	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	@found = grep /^$filename\.\d{10}\-\d{10}$|^$filename\.\d{10}\-\d{10}\.gz$|^$filename\.\d{10}\-\d{10}\.indx$/, readdir DIR;
-	closedir DIR;
-
-	# append each found file as OLD/archive/name in sorted order
-	#
-	foreach $i (sort @found) {
-	    push(@$list, "$archdir/$i");
-	}
+	@$list = grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist;
 
     # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
     #
@@ -1225,18 +1264,11 @@ sub scandir($$$\@)
 
 	# scan the OLD/ again
 	#
-	if (! opendir DIR, $olddir) {
-	    &warning(34, "can't open OLD/archive dir: $olddir");
+	if (! &loaddir($olddir, \@filelist)) {
+	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	@found = grep /^$filename\.\d{10}\-\d{10}$|^$filename\.\d{10}\-\d{10}\.gz$|^$filename\.\d{10}\-\d{10}\.indx$/, readdir DIR;
-	closedir DIR;
-
-	# append each found file as OLD/name in sorted order
-	#
-	foreach $i (sort @found) {
-	    push(@$list, "$olddir/$i");
-	}
+	@$list = grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist;
     }
 }
 
@@ -1269,7 +1301,7 @@ sub rm($$)
 	#
 	if ($filename =~ m#^/# || $filename =~ m#^\.\.\/# ||
 	    $filename =~ m#^/\.\./"#) {
-	    &warning(35, "unsafe filename to remove: $filename");
+	    &warn_msg(35, "unsafe filename to remove: $filename");
 	    return;
 	}
 	if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
@@ -1282,7 +1314,7 @@ sub rm($$)
 	    print "DEBUG: rm $filename\n" if $verbose;
 
 	} else {
-	    &warning(36, "cannot remove $filename\n");
+	    &warn_msg(36, "cannot remove $filename\n");
 	}
     }
 }
@@ -1304,7 +1336,7 @@ sub cleanlist(\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&error(37, "cleanlist: 2nd argument is not an array reference");
+	&err_msg(37, "cleanlist: 2nd argument is not an array reference");
     }
 
     # do nothing if the list has 1 or 0 files in it
@@ -1325,7 +1357,7 @@ sub cleanlist(\@)
 	# firewall - catch dup and bogus sorting
 	#
 	if ($prev eq $cur) {
-	    &error(38, "cleanlist: found duplicate list item: $cur");
+	    &err_msg(38, "cleanlist: found duplicate list item: $cur");
 	}
 
 	# catch foo and foo.gz and remove foo
@@ -1376,7 +1408,7 @@ sub splitlist(\@\@\@\@\@\@)
 	ref($list) ne 'ARRAY' || ref($single) ne 'ARRAY' ||
 	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
 	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
-	&error(39, "splitlist: arg(s) are not an array reference");
+	&err_msg(39, "splitlist: arg(s) are not an array reference");
     }
 
     # truncate lists
@@ -1416,7 +1448,7 @@ sub splitlist(\@\@\@\@\@\@)
 	# we should not get here
 	#
 	} else {
-	    &error(40, "splitlist: found bogus member of file list: $i");
+	    &err_msg(40, "splitlist: found bogus member of file list: $i");
 	}
     }
 }
@@ -1522,7 +1554,7 @@ sub archive($$$$)
 	    #
 	    if (! &safe_file_create($file, $file_uid, $file_gid,
 	    			    $file_mode, $false)) {
-	    	&warning(41, "could not exclusively create $filename");
+	    	&warn_msg(41, "could not exclusively create $filename");
 		return $false;
 	    }
 	}
@@ -1530,7 +1562,7 @@ sub archive($$$$)
 	# verfiy that the file still exists
 	#
 	if (! -f $file) {
-	    &warning(42, "created $filename and now it is missing");
+	    &warn_msg(42, "created $filename and now it is missing");
 	    return $false;
 	}
     }
