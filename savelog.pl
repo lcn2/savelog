@@ -1,10 +1,11 @@
+#!/usr/bin/perl -w
 #!/usr/bin/perl -Tw
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.28 $
-# @(#) $Id: savelog.pl,v 1.28 2000/02/02 08:12:18 chongo Exp chongo $
-# @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
+# @(#) $Revision: 1.29 $
+# @(#) $Id: savelog,v 1.29 2000/02/05 09:12:59 chongo Exp chongo $
+# @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -51,10 +52,15 @@
 #	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
 #	-a OLD	   - OLD directory name (not a path) (def: OLD)
 #	-A archive - form archive symlink for gzip files (def: don't)
-#	file 	   - log file names
+#
+# 	savelog [... same flags as above ...] -R dir ...
+#
+#	-R	   - args are dits under which most files are archived
 #
 # FYI:
 #	-t	   - (option is ignored, backward compat with Smail savelog)
+#
+#	NOTE: No Smail code was used in the writing of this source.
 #
 # The savelog tool can archive, compress (gzip) and index files such as
 # mailboxes or log files.  Care is taken to ensure that:
@@ -280,6 +286,38 @@
 #
 ###
 #
+# If -R is used, then the arguments are assumed to directories under
+# which files will be found.  A tree walk is performed and appropriate
+# files are processed.
+#
+# The following files are NOT archived when -R is given:
+#
+#	* non-files (dirs, symlinks, sockets, named pipes, special files, ...)
+#	* basename of files starting with .
+#	* files ending in .gz, .indx or .new
+#	* files that match m#\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$#
+#
+# During the tree walk, the following directories will NOT be walked and
+# hence all files under them will be ignored:
+#
+#	* directories that start with .
+#	* directories with the name CVS, RCS or SCCS
+#	* directories with the name OLD or archive
+#	* if -a was given, directories with the same OLD directory name
+#	* directories that are not writable or readable
+#	* directories that are not searchable (have no x bits)
+#
+# If a filename is along with with -R, that filename is processed as
+# a regular file without filename restrictions
+#
+# NOTE: By use of the phrase 'During the tree walk' we refer to files
+#	found under the given dir command line argument, not the dir
+#	argument itself.  For example, of one gives the a command
+#	line argument of OLD, files under OLD will be processed
+#	however files under OLD/OLD will not.
+#
+###
+#
 # The following prechecks are performed at the start of savelog:
 #
 #	-1) Precheck: 	:-)
@@ -354,6 +392,11 @@
 #   NOTE: If -n was given, we will not perform any actions, just go thru
 #	  the motions and print shell commands that perform the equivalent
 #	  of what would happen.
+#
+#   NOTE: If -R was given, we will assume that the args are directories
+#	  and walk the trees under them and perform the equivalent below
+#	  as if -R dir ... was replaced with the appropriate files
+#	  found under the directories.  See above for information on -R.
 #
 # The order of processing of /a/path/file is as follows:
 #
@@ -452,7 +495,7 @@ use strict;
 use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
 	    $opt_n $opt_1 $opt_z $opt_T $opt_l $opt_v
-	    $opt_i $opt_I $opt_a $opt_A);
+	    $opt_i $opt_I $opt_a $opt_A $opt_R);
 use Getopt::Std;
 $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
 $ENV{IFS} = " \t\n";
@@ -463,6 +506,7 @@ use Cwd;
 use File::Basename;
 use File::Copy;
 use IO::File;
+use File::Find;
 require 'syscall.ph';
 
 # my vars
@@ -496,9 +540,9 @@ $usage = "usage:\n" .
 	 "\t\n" .
 	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
 	 "\t-M mode\t chmod archived files to mode (def: 0444)\n" .
-	 "\t-o owner\t chown files to user (def: do not chown)\n" .
-	 "\t-g group\t chgrp files to group (def: do not chgrp)\n" .
-	 "\t-c count\t cycles of the file to keep, 0=>unlimited (def: 7)\n" .
+	 "\t-o owner chown files to user (def: do not chown)\n" .
+	 "\t-g group chgrp files to group (def: do not chgrp)\n" .
+	 "\t-c count cycles of the file to keep, 0=>unlimited (def: 7)\n" .
 	 "\t-n\t gzip the most recent cycle now (def: wait 1 cycle)\n" .
 	 "\t-n\t do not do anything, just print cmds (def: do something)\n" .
 	 "\t-1\t gzip the new 1st cycle now (def: wait 1 cycle)\n" .
@@ -507,9 +551,12 @@ $usage = "usage:\n" .
 	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
-	 "\t-a OLD\t OLD directory name (not a path) (def: OLD)\n" .
+	 "\t-a OLD\t\t OLD directory name (not a path) (def: OLD)\n" .
 	 "\t-A archive\t form archive symlink for gzip files (def: don't)\n" .
-	 "\tfile ...\tlog file names\n";
+	 "\t\n" .
+	 "$0 [... same flags as above ...] -R dir ...\n" .
+	 "\t\n" .
+	 "\t-R\t args are directories under which most files are archived\n";
 
 # main
 #
@@ -518,9 +565,6 @@ MAIN:
     # my vars
     #
     my $file;		# the current file we are processing
-    my $dir;		# prep directory in which $file resides
-    my $gz_dir;		# where .gz files are to be placed
-    my $have_archive;	# TRUE => we have an OLD/archive dir
 
     # setup
     #
@@ -545,25 +589,20 @@ MAIN:
     #
     &parse();
 
-    # process each file
+    # perform tree walking if -R
     #
-    foreach $file (@ARGV) {
+    if (defined $opt_R) {
 
-	# prepare to process the file
-	#
-	print "\n" if $verbose;
-	if (! &prepfile($file, \$dir, \$gz_dir, \$have_archive)) {
-	    print STDERR "error while preparing for $file, skipping\n";
-	    next;
-	}
+	@ARGV = map { &untaint($_) } @ARGV;
+	find(\&process_dir, @ARGV);
 
-	# archive the file
-	#
-	if (! &archive($file, $dir, $gz_dir, $have_archive)) {
-	    print STDERR "error while processing $file\n";
-	    next;
+    # process each file (without -R)
+    #
+    } else {
+
+	foreach $file (@ARGV) {
+	    &process_file($file);
 	}
-	print "DEBUG: finished with $file\n" if $verbose;
     }
 
     # all done
@@ -637,6 +676,145 @@ sub warn_msg($$@)
 }
 
 
+# process_dir - archive files under a dir via the find function
+#
+# usage:
+#	find(\&process_dir, @DIR_LIST);
+#
+#	$dir	directory to proecss
+#
+# NOTE: This function will blindly attempt to start to walk down any directory.
+#	While the find process will exclude dirs under the -R rules (see above)
+#	it is willing to start walk down any directory.
+#
+sub process_dir($)
+{
+    my $name = $_;	# the basename found by find()
+
+    # taint pruning and untainting
+    #
+    if ($File::Find::name =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    	$File::Find::name = $1;
+    } else {
+	# disable further tree walking on a tainted name
+	#
+	print "DEBUG: process_dir: tainted path: $File::Find::name\n"
+	 	if $verbose;
+	$File::Find::prune = $true;
+    	return;
+    }
+
+    # prune out dirs with the name CVS, RCS or SCCS
+    #		     with the name OLD or archive
+    #		     start with .
+    #		     if -a was given, dir with the same OLD directory name
+    #		     that are not writable, readable or searchable
+    #
+    if (-d $name &&
+        ($name eq "CVS" || $name eq "RCS" || $name eq "SCCS" ||
+    	 $name eq "OLD" || $name eq "archive" || $name =~ /^\../ ||
+	 (defined $opt_a && $name eq $oldname) ||
+	 ! -r $name || ! -w $name || ! -x $name)) {
+
+	# disable further tree walking
+	#
+	print "DEBUG: process_dir: pruning dir: $File::Find::name\n"
+		if $verbose;
+	$File::Find::prune = $true;
+	return;
+    }
+
+    # ignore symlinks
+    #
+    if (-l $name) {
+	print "DEBUG: process_dir: ignoring symlink: $File::Find::name\n"
+		if $verbose;
+	return;
+    }
+
+    # pass thru directories
+    #
+    if (-d $name) {
+	print "DEBUG: process_dir: passing dir: $File::Find::name\n"
+		if $verbose;
+	return;
+    }
+
+    # ignore other non-files
+    #
+    if (! -f $name) {
+	print "DEBUG: process_dir: ignoring non-file: $File::Find::name\n"
+		if $verbose;
+	return;
+    }
+
+    # ignore files ending in .gz, .indx or .new
+    #		   starting with .
+    #	     	   that match m#\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$#
+    #
+    if ($name =~ /\.gz$|\.indx$|\.new$|^\.|\.\d{9,10}$|\.\d{9,10}\-\d{9,10}$/) {
+	print "DEBUG: process_dir: ignoring file: $File::Find::name\n"
+		if $verbose;
+	return;
+    }
+
+    # process the file
+    #
+    &process_file($name);
+    return;
+}
+
+
+# process_file - archive a file
+#
+# usage:
+#	&process_file($file);
+#
+#	$file	filename to process
+#
+# NOTE: This function will blindly attempt to process any file, even those
+#	files that are not to be processed under -R tree walking.
+#
+sub process_file($)
+{
+    my $file = $_[0];		# filename to process
+    my $status;			# subroutine return status
+    my $dir;			# prep directory in which $file resides
+    my $gz_dir;			# where .gz files are to be placed
+    my $have_archive;		# TRUE => we have an OLD/archive dir
+
+    # prepare to process the file
+    #
+    if ($verbose && defined $opt_n) {
+	print "\nDEBUG: starting with: $file\n" if $verbose;
+	print "# starting with: $file\n\n" if defined $opt_n;
+    } else {
+	print "\nDEBUG: starting with: $file\n\n" if $verbose;
+	print "\n# starting with: $file\n\n" if defined $opt_n;
+    }
+    if (! (($status, $dir, $gz_dir, $have_archive) = &prep_file($file)) ) {
+	print STDERR "error while preparing for $file, skipping\n";
+	next;
+    }
+
+    # archive the file
+    #
+    if (! &archive($file, $dir, $gz_dir, $have_archive)) {
+	print STDERR "error while processing $file\n";
+	next;
+    }
+    if ($verbose && defined $opt_n) {
+	print "DEBUG: finished with: $file\n" if $verbose;
+	print "# finished with: $file\n" if defined $opt_n;
+    } else {
+	print "\nDEBUG: finished with: $file\n" if $verbose;
+	print "\n# finished with: $file\n" if defined $opt_n;
+    }
+
+    return;
+}
+
+
 # parse - parse the command line args
 #
 # usage:
@@ -670,7 +848,7 @@ sub parse()
 
     # parse args
     #
-    if (!getopts('m:M:o:g:c:n1zTlvi:I:a:A:') || !defined($ARGV[0])) {
+    if (!getopts('m:M:o:g:c:n1zTlvi:I:a:A:R') || !defined($ARGV[0])) {
     	die $usage;
 	exit 1;
     }
@@ -815,7 +993,7 @@ sub parse()
 #	&untaint($file)
 #
 # returns:
-#	$file or calls &err_msg()
+#	untainted $file or calls &err_msg()
 #
 # This function helps ensure that the filenames used to not have bad or
 # dangerous chars in them.  It is designed to pass -T taint-perl inspection.
@@ -833,35 +1011,35 @@ sub untaint($)
 }
 
 
-# prepfile - prepare archive a file
+# prep_file - prepare archive a file
 #
 # usage:
-#	&prepfile($file, \$dir_p, \$gz_dir_p, \$have_archive_p);
+#	($status, $dir, $gz_dir, $have_archive) = &prep_file($file);
 #
 #	$file			path of prep file to archive
-#	\$dir_p			ref to prep directory of $file
-#	\$gz_dir_p		ref to where .gz files are to be placed
-#	\$have_archive_p	true => we have an OLD/archive
 #
 # returns:
+#    status:
 #	0 ==> prep was unsuccessful
 #	1 ==> prep was successful
+#    $dir		ref to prep directory of $file
+#    $gz_dir		ref to where .gz files are to be placed
+#    $have_archive	true => we have an OLD/archive
 #
-sub prepfile($\$\$\$)
+sub prep_file($\$\$\$)
 {
     # my vars
     #
-    my ($file, $dir_p, $gz_dir_p, $have_archive_p) = @_;	# parse args
+    my ($file) = @_;		# parse args
     my $dir;			# dirname of $file (dir where file exists)
     my $gz_dir;			# directory where .gz files are kept
+    my $have_archive;		# true => we have an OLD/archive
     my $mode;			# stated mode of a file or directory
     my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
 
     # untaint the file
     #
     $file = &untaint($file);
-    print "DEBUG: starting to process: $file\n" if $verbose;
-    print "\n# starting to process: $file\n" if defined $opt_n;
 
     # determine the file's directory
     #
@@ -873,7 +1051,7 @@ sub prepfile($\$\$\$)
     if (! -d "$dir/$oldname") {
 	if (! mkdir("$dir/$oldname", $archdir_mode)) {
 	    &warn_msg(17, "cannot mkdir: $dir/$oldname");
-	    return $false;
+	    return ($false, undef, undef, undef);
 	} else {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
 	}
@@ -892,7 +1070,7 @@ sub prepfile($\$\$\$)
 	#
 	if (! -d $archive_dir) {
 	    &err_msg(18,
-	    	"prepfile: archive dir: $archive_dir is not a directory");
+	    	"prep_file: archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
 	#
@@ -903,7 +1081,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(19, "prepfile: cannot stat archive dir: $archive_dir");
+	    	&err_msg(19, "prep_file: bad stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -915,7 +1093,7 @@ sub prepfile($\$\$\$)
 		    !symlink($archive_dir, "$dir/$oldname/archive")) {
 		    &warn_msg(20,
 			"cannot symlink $dir/$oldname/archive to $archive_dir");
-		    return $false;
+		    return ($false, undef, undef, undef);
 		}
 		printf("DEBUG: symlink %s to %s\n",
 		       "$dir/$oldname/archive", $archive_dir) if $verbose;
@@ -928,13 +1106,13 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$dir/$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&err_msg(21, "prepfile: can't stat archive dir: $archive_dir");
+	    	&err_msg(21, "prep_file: can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
 	    	&warn_msg(22,
 		    "$dir/$oldname/archive is a dir and is not $archive_dir");
-	    	return $false;
+	    	return ($false, undef, undef, undef);
 	    }
 
 	# No OLD/archive exists, so make is a symlink to archive_dir
@@ -946,13 +1124,13 @@ sub prepfile($\$\$\$)
 	    if (!symlink($archive_dir, "$dir/$oldname/archive")) {
 		&warn_msg(23,
 		    "cannot symlink $dir/$oldname/archive to $archive_dir");
-		return $false;
+		return ($false, undef, undef, undef);
 	    }
 	    printf("DEBUG: symlinked %s to %s\n",
 		   "$dir/$oldname/archive", $archive_dir) if $verbose;
 	}
 	$gz_dir = "$dir/$oldname/archive";
-	$$have_archive_p = $true;
+	$have_archive = $true;
 
     # If we were not asked to use an archive subdir of OLD but one
     # exists anyway, be sure it has the right mode and is writable
@@ -962,14 +1140,14 @@ sub prepfile($\$\$\$)
 	# archive is a directory, so OLD/archive is the .gz directory
 	#
 	$gz_dir = "$dir/$oldname/archive";
-	$$have_archive_p = $true;
+	$have_archive = $true;
 
     } else {
 
 	# no archive directory, so OLD is the .gz directory
 	#
 	$gz_dir = "$dir/$oldname";
-	$$have_archive_p = $false;
+	$have_archive = $false;
     }
     print "DEBUG: .gz directory: $gz_dir\n" if $verbose;
 
@@ -984,12 +1162,12 @@ sub prepfile($\$\$\$)
 	} else {
 	    &warn_msg(24, "unable to chmod 0%03o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
-	    return $false;
+	    return ($false, undef, undef, undef);
 	}
     }
     if (! -w "$dir/$oldname") {
 	&warn_msg(25, "OLD directory: $dir/$oldname is not writable");
-    	return $false;
+    	return ($false, undef, undef, undef);
     }
     #
     if ($gz_dir ne "$dir/$oldname") {
@@ -1002,20 +1180,18 @@ sub prepfile($\$\$\$)
 	    } else {
 		&warn_msg(26, "unable to chmod 0%03o archive directory: %s",
 		    $archdir_mode, $gz_dir);
-		return $false;
+		return ($false, undef, undef, undef);
 	    }
 	}
 	if (! -w $gz_dir) {
 	    &warn_msg(27, "archive directory: $gz_dir is not writable");
-	    return $false;
+	    return ($false, undef, undef, undef);
 	}
     }
 
     # return dir, file, gz_dir and success
     #
-    $$dir_p = $dir;
-    $$gz_dir_p = $gz_dir;
-    return $true;
+    return ($true, $dir, $gz_dir, $have_archive);
 }
 
 
