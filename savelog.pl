@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.12 $
-# @(#) $Id: savelog.pl,v 1.12 2000/01/30 05:49:32 chongo Exp chongo $
+# @(#) $Revision: 1.13 $
+# @(#) $Id: savelog.pl,v 1.13 2000/01/30 06:40:11 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -468,6 +468,14 @@ my $exit_val;		# how we will exit
 #
 my $true = 1;		# truth as we know it
 my $false = 0;		# genuine falseness
+#
+
+# directory cache
+#
+# $dir_cache[$dir_indx{$dir}] is an array of filenames found directly under $dir
+#
+my @dir_cache;		# $dir_cache[$dir_indx{$dir}] - array of filenames
+my %dir_indx;		# @dir_cache index for $dir
 
 # setup
 #
@@ -506,10 +514,11 @@ MAIN:
 
 $opt_n = 1;	# XXX - DEBUG
 
-
     # setup
     #
     $exit_val = 0;	# hope for the best
+    select STDOUT;
+    $| = 1;
 
     # parse args
     #
@@ -1135,11 +1144,23 @@ sub loaddir($\@)
 {
     my ($dir, $list) = @_;	# get args
     my $filename;		# filename found in $dir
+    my $i;
 
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
 	&err_msg(31, "loaddir: 2nd argument is not an array reference");
+    }
+
+    # if we found it in the cache, return the cached filenames
+    #
+    if (defined $dir_indx{$dir}) {
+	print "DEBUG: found $dir in cache indx: $dir_indx{$dir}\n" if $verbose;
+	$#$list = -1;
+	for ($i=0; defined $dir_cache[$dir_indx{$dir}][$i]; ++$i) {
+	    push(@$list, $dir_cache[$dir_indx{$dir}][$i]);
+	}
+	return $true;
     }
 
     # prep for scanning dir
@@ -1148,13 +1169,19 @@ sub loaddir($\@)
 	&warn_msg(32, "unable to open dir: $dir");
 	return $false;
     }
-    $#$list = -1;
 
     # scan dir for filenames
     #
+    $#$list = -1;
     while ($filename = readdir DIR) {
 	push(@$list, "$dir/$filename") if -f "$dir/$filename";
     }
+
+    # cache the list of filenames
+    #
+    $dir_indx{$dir} = @dir_cache;
+    $dir_cache[@dir_cache] = [ @$list ];
+    print "DEBUG: cached $dir in cache indx: $dir_indx{$dir}\n" if $verbose;
 
     # cleanup, all done
     #
@@ -1203,10 +1230,6 @@ sub scandir($$$\@)
 	&err_msg(31, "scandir: 4th argument is not an array reference");
     }
 
-    # clear the list
-    #
-    $#$list = -1;
-
     # scan OLD/ for files of the form filename\.\d{10}
     #
     print "DEBUG: scanning $olddir for $filename files\n" if $verbose;
@@ -1214,7 +1237,9 @@ sub scandir($$$\@)
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
     }
-    @$list = grep m#/$filename\.\d{10}$#, @filelist;
+print "DEBUG: filelist #1:\n  DGB: ", join("\n  DBG: ", @filelist), "\n";
+    @$list = sort grep m#/$filename\.\d{10}$#, @filelist;
+print "DEBUG: list #1:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 
     # scan OLD/archive if it exists
     #
@@ -1227,7 +1252,9 @@ sub scandir($$$\@)
 	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	push(@$list, grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+print "DEBUG: filelist #2:\n  DBG: ", join("\n  DBG: ", @filelist), "\n";
+	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+print "DEBUG: list #2:\n  DGB: ", join("\n  DBG: ", @$list), "\n";
 
     # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
     #
@@ -1240,7 +1267,9 @@ sub scandir($$$\@)
 	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	push(@$list, grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+print "DEBUG: filelist #3:\n  DGB: ", join("\n  DBG: ", @filelist), "\n";
+	push(@$list, sort grep m#/$filename\.\d{10}\-\d{10}$|/$filename\.\d{10}\-\d{10}\.gz$|/$filename\.\d{10}\-\d{10}\.indx$#, @filelist);
+print "DEBUG: list #3:\n  DBG:  ", join("\n  DBG: ", @$list), "\n";
     }
 }
 
@@ -1556,12 +1585,15 @@ sub archive($$$$)
     if ($cycle > 0 && $#double ge $cycle-1) {
 	&rmcycles(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     }
-print "\nDEBUG: all list: ", join("\nDEBUG:", @list), "\n";
-print "\nDEBUG: single list: ", join("\nDEBUG:", @single), "\n";
-print "\nDEBUG: gz list: ", join("\nDEBUG:", @gz), "\n";
-print "\nDEBUG: plain list: ", join("\nDEBUG:", @plain), "\n";
-print "\nDEBUG: double list: ", join("\nDEBUG:", @double), "\n";
-print "\nDEBUG: index list: ", join("\nDEBUG:", @indx), "\n";
+
+    # XXX - misc debug stuff
+    #
+    print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
+    print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
+    print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
+    print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
+    print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
+    print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
 
     # all done
     #
