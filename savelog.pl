@@ -3,11 +3,11 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.7 $
-# @(#) $Id: savelog,v 2.7 2002/01/11 01:34:11 root Exp root $
-# @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
+# @(#) $Revision: 2.8 $
+# @(#) $Id: savelog.pl,v 2.8 2002/01/11 02:02:47 root Exp chongo $
+# @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
-# Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -34,7 +34,7 @@
 ###
 #
 # usage: savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
-#		 [-h] [-n] [-1] [-z] [-T] [-l] [-v]
+#		 [-h] [-n] [-1] [-z] [-T] [-L] [-v]
 #		 [-i type [-I typedir]] [-a OLD] [-A archive] file ...
 #
 #	-m mode	   - chmod current files to mode (def: 0644)
@@ -47,7 +47,7 @@
 #	-1	   - gzip the new 1st cycle now (def: wait 1 cycle)
 #	-z	   - force the processing of empty files (def: don't)
 #	-T	   - do not create if missing
-#	-l	   - do not gzip any new files (def: gzip after 1st cycle)
+#	-L	   - do not gzip any new files (def: gzip after 1st cycle)
 #	-v	   - enable verbose / debug mode
 #	-i type	   - form index files of a given type (def: don't)
 #	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
@@ -119,30 +119,8 @@
 #
 # Any previously archived files (files of the form name.timestamp-timestamp)
 # found in OLD that are not gziped will be gziped during savelog processing
-# unless '-l' was given.  The '-l' option prevents the 1st cycle from
+# unless '-L' was given.  The '-L' option prevents the 1st cycle from
 # being gziped as well as preventing other archived files from being gziped.
-#
-###
-#
-# When a new file is put in place, it is hard linked to a file under the
-# OLD directory with a single timestamp in its name.  I.e.,
-#
-#	ln /a/path/file /a/path/OLD/file.948346647
-#
-# where '948346647' is the time of when the link was made.  On the next
-# cycle, this linked file is renamed to:
-#
-#	/a/path/OLD/file.948346647-948433048
-#
-# where '948433048' is the time when the move took place.  Also as a result
-# a new empty /a/path/file is hard linked to:
-#
-#	/a/path/OLD/file.948433048
-#
-# It is possible that the file is removed and replaced in-between cycles
-# resulting in the hard link breaking.  If savelog finds that the file
-# is no longer linked to the new timestamp copy, savelog will reform the
-# link before processing the file further.
 #
 ###
 #
@@ -217,11 +195,10 @@
 # with the oldest starting timestamps until the number of cycles is
 # reduced.  For example, if ``-c 3'' is given and the follow files exist:
 #
-#	/a/path/OLD/file.947482648	(doesn't count, linked to current file)
 #	/a/path/OLD/file.947396249-947482648		(cycle 1)
 #	/a/path/OLD/file.947309849-947396249.gz		(cycle 2)
 #	/a/path/OLD/file.947223450-947309849.gz		(cycle 3)
-#	/a/path/OLD/file.947137050-947223450.gz		(cycle 4)
+#	/a/path/OLD/file.947137058-947050649.gz		(cycle 4)
 #	/a/path/OLD/file.947050649-947137050.gz		(cycle 5)
 #
 # Then the files associated with cycle 4 and 5 would be removed.  Also
@@ -229,7 +206,6 @@
 # processed (say because it was non-empty).  This 3 cycle files would
 # remain afterwards:
 #
-#	/a/path/OLD/file.947569049	(doesn't count, linked to current file)
 #	/a/path/OLD/file.947482648-947569049		(new cycle 1)
 #	/a/path/OLD/file.947396249-947482648.gz		(new cycle 2)
 #	/a/path/OLD/file.947309849-947396249.gz		(new cycle 3)
@@ -255,21 +231,11 @@
 #
 #	/b/history/directory/file.948209998-948296401.gz
 #
-# 	[[ NOTE: The '-A archive' file will cause the archive symlink.
-#	   to be created (or changed if it existed previously).  Savelog
-#	   will create a directory where the archive symlink points
-#	   if one does not exist already.  If savelog cannot do this, then
-#	   savelog will refuse to run.
-#
-#	   If one does create the archive symlink, it is recommended that
-#	   any previously gziped and indexed files be moved into the new
-#	   archive directory.  This is because savelog will ignore any
-#	   gziped files directly under OLD when the archive symlink exists.
-#
-#	   Non-gziped files under OLD will remain under OLD and will
-#	   continue to be moved under OLD regardless of if 'archive'
-#	   exists or not.  However when the non-gziped newest cycle
-#	   is gziped, it will be gziped into the archive directory. ]]
+# 	NOTE: The '-A archive' file will cause the archive symlink.
+#	      to be created (or changed if it existed previously).  Savelog
+#	      will create a directory where the archive symlink points
+#	      if one does not exist already.  If savelog cannot do this,
+#	      then savelog will refuse to run.
 #
 ###
 #
@@ -422,66 +388,67 @@
 #	   Assertion: At this point only count-1 cycles exist, or '-c 0'
 #		      was given and no files were removed.
 #
-#	3) If more than one file of the form: /a/path/OLD/file.tstamp exists,
-#	   then all but the newest timestamp are renamed to files of the form:
-#	   /a/path/OLD/file.time-time (files with two timestamps with
-#	   the same time).  The exception is if one of those files is hardlinked
-#	   to /a/path/file.  If that is the case, then that file, not the
-#	   file with the newest timestamp, is not renamed.
+#	3) If -L was NOT given, then gzip all files of the form
+#	   /a/path/OLD/file.tstamp1-tstamp2.  The gziped files will be
+#	   placed under /a/path/OLD/archive if '-A archive' was given,
+#	   or under /a/path/OLD if it was not.
 #
-#	   Assertion: At this point, either 1 or 0 files of the form:
-#		      /a/path/OLD/file.tstamp exist.
+#	   If -L was NOT given and if '-A archive' was given then also gzip
+#	   any files of the form /a/path/OLD/archive/file.tstamp1-tstamp2
+#	   into the /a/path/OLD/archive directory if it exists.
 #
-#	4) Gzip the all files of the form: /a/path/OLD/file.tstamp1-tstamp2
-#	   unless -1 was given.   Files will be placed under /a/path/OLD or
-#	   /a/path/OLD/archive if it exists.  If -1 was given, then
-#	   no files will be gziped.
+#	   If -L was given and '-A archive' was given then any files of the
+#	   form /a/path/OLD/file.tstamp1-tstamp2 are moved to
+#	   /a/path/OLD/archive/file.tstamp1-tstamp2.
+#
+#	   If -L was given and '-A archive' was NOT given, then no files
+#	   are touched in this step.
 #
 #	   Assertion: At this point, all files of the form file.tstamp1-tstamp2
-#		      have been gziped, or -1 was given and no additional files
+#		      have been gziped, or -L was given and no additional files
 #		      were gziped.
 #
-#	5) If /a/path/OLD/file.tstamp is not hard linked to /a/path/file,
-#	   when remove /a/path/OLD/file.tstamp and relink /a/path/file to it.
-#	   If /a/path/OLD/file.tstamp does not exist, then link /a/path/file
-#	   to /a/path/OLD.file.now where 'now' is the current timestamp.
+#	   NOTE: Even if '-A archive' was given on the previous run, a file
+#		 of the form /a/path/OLD/file.tstamp1-tstamp2 was previously
+#		 formed.  For this run, either /a/path/OLD/file.tstamp1-tstamp2
+#		 will be gzipped under /a/path/OLD/archive (without -L
+#		 or moved under /a/path/OLD/archive (with -L).
 #
-#	   Assertion: /a/path/OLD/file.tstamp exists and is hard linked
-#		      to /a/path/file.
+#	4) Hard link /a/path/file to /a/path/OLD/file.tstamp_last-now.
+#	   Here, 'tstamp_last' is the most recent tstamp2 value from
+#	   files of the form /a/path/OLD/file.tstamp1-tstamp2 found
+#	   in step 3).  If no such files were found in step 3), then
+#	   'tstamp_last' will be set to 'now'.
 #
-#	6) Create /a/path/.file.new with the proper mode, uid and gid.
+#	   Assertion: /a/path/OLD/file.tstamp_last-now is a hard link
+#		      to the file /a/path/file.
+#
+#	   NOTE: The hard link to /a/path/OLD/file.tstamp_last-now is
+#		 done even if '-A archive' was given.  See NOTE in step 3).
+#
+#	5) Create /a/path/.file.new with the proper mode, uid and gid.
 #
 #	   Assertion: /a/path/.file.new exists with the proper mode, uid & gid.
 #
-#	7) Move /a/path/.file.new to /a/path/file (and thus unlinking the
+#	6) Move /a/path/.file.new to /a/path/file (and thus unlinking the
 #	   old /a/path/file inode).
 #
 #	   Assertion: /a/path/file exists with the proper mode, uid and gid.
 #
-#	   Assertion: The file /a/path/OLD/file.tstamp (referred to in
-#		      step 6) exists and is not had linked to /a/path/file.
+#	   Assertion: The file /a/path/OLD/file.tstamp_last-now (referred
+#		      to in step 4) exists and is not had linked to
+#		      /a/path/file.
 #
-#	8) The file /a/path/OLD/file.tstamp (referred to in step 6) is
-#	   renamed /a/path/file.tstamp-now where now is the current timestamp.
+#       7) If -i, then /usr/local/lib/savelog /a/path/OLD/file.tstamp_last-now
+#	   is executed to form /a/path/OLD/file.tstamp_last-now.indx.  If -i
+#	   was not given, we will skip this step.
 #
-#	   Assertion: The file /a/path/file.tstamp-now exists.
+#	   Assertion: The file /a/path/OLD/file.tstamp_last-now exists.
 #
-#       9) The file /a/path/file is hardlinked to /a/path/OLD/file.now
-#	   (now is the timestamp referred to in step 9).
-#
-#	   Assertion: The file /a/path/OLD/file.now exists and is hard linked
-#		      to /a/path/file.
-#
-#      10) If -i, then /usr/local/lib/savelog /a/path/OLD/file.tstamp-now
-#	   is executed to form /a/path/OLD/file.tstamp-now.indx.  If -i was
-#	   not given, we will skip this step.
-#
-#	   Assertion: The file /a/path/OLD/file.tstamp-now exists.
-#
-#	   Assertion: The file /a/path/OLD/file.tstamp-now.indx exists and
+#	   Assertion: The file /a/path/OLD/file.tstamp_last-now.indx exists and
 #		      -i was given.
 #
-#      11) If -1 was given, the gzip /a/path/OLD/file.tstamp-now.  Place the
+#       8) If -1 was given, the gzip /a/path/OLD/file.tstamp-now.  Place the
 #	   result under /a/path/OLD or /a/path/OLD/archive if it exists.
 #	   If -1 was not given, then we will ship this step.
 #
@@ -495,12 +462,13 @@
 use strict;
 use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
-	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_l $opt_v
+	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_L $opt_v
 	    $opt_i $opt_I $opt_a $opt_A $opt_R);
 use Getopt::Std;
 $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
 $ENV{IFS} = " \t\n";
 $ENV{SHELL} = "/bin/sh";
+delete $ENV{BASH_ENV};
 delete $ENV{ENV};
 delete $ENV{GZIP};
 use Cwd;
@@ -525,10 +493,10 @@ my $oldname;		# name of the OLD directory
 my $archive_dir;	# where the archive symlink should point
 #
 my $exit_val;		# how we will exit
-my $gzip;		# location of the gzip program
+my $gzip_prog;		# location of the gzip program
 #
-my $true = 1;		# truth as we know it
-my $false = 0;		# genuine falseness
+my $true = 1;		# truth as we know it :-)
+my $false = 0;		# genuine falseness :-)
 #
 my %dir_cache;		# $dir_cache{$dir} - \@list of archived files in $dir
 my @walk_files;		# list if files found by walk_dir()
@@ -537,7 +505,7 @@ my @walk_files;		# list if files found by walk_dir()
 #
 $usage = "usage:\n" .
 	 "$0 [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]\n" .
-	 "\t[-h] [-n] [-1] [-z] [-T] [-l] [-v]\n" .
+	 "\t[-h] [-n] [-1] [-z] [-T] [-L] [-v]\n" .
 	 "\t[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...\n" .
 	 "\t\n" .
 	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
@@ -550,7 +518,7 @@ $usage = "usage:\n" .
 	 "\t-1\t gzip the new 1st cycle now (def: wait 1 cycle)\n" .
 	 "\t-z\t force the processing of empty files (def: don't)\n" .
 	 "\t-T\t do not create if missing\n" .
-	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
+	 "\t-L\t do not gziped any new files (def: gzip after 1st cycle)\n" .
 	 "\t-v\t\t verbose output\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
@@ -575,11 +543,11 @@ sub tstamp_cmp();
 sub load_dir($);
 sub scan_dir($$$$);
 sub rm($$);
+sub last_tstamp(@);
 sub clean_list(@);
 sub split_list(@);
 sub rm_cycles(@@);
-sub clean_tstamp($@);
-sub gzip($$$);
+sub gzip_or_move($$$$);
 sub hard_link($$);
 sub archive($$$$);
 
@@ -593,17 +561,17 @@ MAIN:
     select STDOUT;
     $| = 1;
     if (-x "/bin/gzip") {
-	$gzip = "/bin/gzip";
+	$gzip_prog = "/bin/gzip";
     } elsif (-x "/usr/bin/gzip") {
-	$gzip = "/usr/bin/gzip";
+	$gzip_prog = "/usr/bin/gzip";
     } elsif (-x "/usr/local/bin/gzip") {
-	$gzip = "/usr/local/bin/gzip";
+	$gzip_prog = "/usr/local/bin/gzip";
     } elsif (-x "/usr/gnu/bin/gzip") {
-	$gzip = "/usr/gnu/bin/gzip";
+	$gzip_prog = "/usr/gnu/bin/gzip";
     } elsif (-x "/usr/freeware/bin/gzip") {
-	$gzip = "/usr/freeware/bin/gzip";
+	$gzip_prog = "/usr/freeware/bin/gzip";
     } else {
-	$gzip = "gzip";
+	$gzip_prog = "gzip";
     }
     umask 0;
 
@@ -874,7 +842,7 @@ sub parse()
 
     # parse args
     #
-    if (!getopts('m:M:o:g:c:hn1zTlvi:I:a:A:R') || !defined($ARGV[0])) {
+    if (!getopts('m:M:o:g:c:hn1zTLvi:I:a:A:R') || !defined($ARGV[0])) {
     	die $usage;
 	exit 1;
     }
@@ -1038,7 +1006,7 @@ sub untaint($)
 {
     my $file = $_[0];		# get arg
 
-    if ($file =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    if ($file =~ m#^([\w./,][-\@\w./+:%,~]*)$#) {
     	$file = $1;
     } else {
 	err_msg(16, "file has dangerous chars: $file");
@@ -1057,10 +1025,10 @@ sub untaint($)
 # returns:
 #    status:
 #	0 ==> prep was unsuccessful
-#	1 ==> prep was successful
+#	1 ==> prep was successful or -n
 #    $dir		ref to prep directory of $file
 #    $gz_dir		ref to where .gz files are to be placed
-#    $have_archive	true => we have an OLD/archive
+#    $have_archive	TRUE => we have an OLD/archive and '-A archive' given
 #
 sub prep_file($)
 {
@@ -1069,27 +1037,37 @@ sub prep_file($)
     my ($file) = @_;		# parse args
     my $dir;			# dirname of $file (dir where file exists)
     my $gz_dir;			# directory where .gz files are kept
-    my $have_archive;		# true => we have an OLD/archive
+    my $have_archive;		# TRUE => we have an OLD/archive and -A given
     my $mode;			# stated mode of a file or directory
     my ($dev1, $dev2, $inum1, $inum2);	# dev/inum of two inodes
-
-    # untaint the file
-    #
-    $file = untaint($file);
 
     # determine the file's directory
     #
     $dir = dirname($file);
     print "DEBUG: $file dir is: $dir\n" if $verbose;
 
+    # untaint the file
+    #
+    $file = untaint($file);
+    if (defined $opt_n) {
+	if (defined($archive_dir)) {
+	    $gz_dir = "$dir/$oldname/archive";
+	    print "# prep_file for file: $file  gz_dir: $gz_dir\n";
+	    return (1, $dir, $gz_dir, $true);
+	} else {
+	    $gz_dir = "$dir/$oldname";
+	    print "# prep_file for file: $file  gz_dir: $gz_dir\n";
+	    return (1, $dir, $gz_dir, $false);
+	}
+    }
+
     # make sure that the OLD directory exists
     #
     if (! -d "$dir/$oldname") {
-	if (! mkdir("$dir/$oldname", $archdir_mode)) {
-	    warn_msg(17, "cannot mkdir: $dir/$oldname");
-	    return ($false, undef, undef, undef);
-	} else {
+	if (mkdir("$dir/$oldname", $archdir_mode)) {
 	    print "DEBUG: created $dir/$oldname\n" if $verbose;
+	} else {
+	    err_msg(17, "cannot mkdir: $dir/$oldname: $!");
 	}
     }
 
@@ -1168,16 +1146,6 @@ sub prep_file($)
 	$gz_dir = "$dir/$oldname/archive";
 	$have_archive = $true;
 
-    # If we were not asked to use an archive subdir of OLD but one
-    # exists anyway, be sure it has the right mode and is writable
-    #
-    } elsif (-d "$dir/$oldname/archive") {
-
-	# archive is a directory, so OLD/archive is the .gz directory
-	#
-	$gz_dir = "$dir/$oldname/archive";
-	$have_archive = $true;
-
     } else {
 
 	# no archive directory, so OLD is the .gz directory
@@ -1186,6 +1154,11 @@ sub prep_file($)
 	$have_archive = $false;
     }
     print "DEBUG: .gz directory: $gz_dir\n" if $verbose;
+    if ($have_archive) {
+	print "DEBUG: have_archive: TRUE\n" if $verbose;
+    } else {
+	print "DEBUG: have_archive: FALSE\n" if $verbose;
+    }
 
     # be sure that OLD, and if needed OLD/archive has the right modes
     #
@@ -1240,9 +1213,9 @@ sub prep_file($)
 #	$uid		force owner to be $uid (or -1 to not chown)
 #	$gid		force group to be $gid (or -1 to not chgrp)
 #	$mode		permissions / ownership
-#	$rename		true ==> force a rename, false ==> OK to create directly
-#	$dir		if $rename is true, the $dir in which $file resides
-#	$base		if $rename is true, basename of $file
+#	$rename		TRUE ==> force a rename, FALSE ==> OK to create directly
+#	$dir		if $rename is TRUE, the $dir in which $file resides
+#	$base		if $rename is TRUE, basename of $file
 #
 # returns:
 #	0 ==> safe create was unsuccessful
@@ -1492,7 +1465,6 @@ sub load_dir($)
 #
 # We will look for files of the form:
 #
-#	file\.\d{9,10}
 #	file\.\d{9,10}\-\d{9,10}
 #	file\.\d{9,10}\-\d{9,10}\.gz
 #	file\.\d{9,10}\-\d{9,10}\.indx
@@ -1526,7 +1498,7 @@ sub scan_dir($$$$)
 	warn_msg(33, "unable to open OLD dir: $olddir");
 	return ($false, undef);
     }
-    @list = grep m#/$base\.\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}$#, @{$filelist};
+    @list = grep m#/$base\.\d{9,10}\-\d{9,10}$#, @{$filelist};
 
     # scan OLD/archive if it exists
     #
@@ -1676,10 +1648,53 @@ sub clean_list(@)
 }
 
 
+# last_tstamp - determine the most recent tstamp in a list of filenames
+#
+# given:
+#	$last_time = last_tstamp(\@list);
+#
+# returns:
+#	Most recent tstamp2 from a list of file.tstamp1-tstamp2* files
+#	or return undef or list is empty or undefined
+#
+sub last_tstamp(@)
+{
+    my ($list) = @_;	# get args
+    my $last = undef;	# most recent tstamp found in $list
+    my $tstamp1;	# tstamp1 from file.tstamp1-tstamp2* filename
+    my $i;
+
+    # verify that we were given references to arrays
+    #
+    if (!defined $list || ref($list) ne 'ARRAY') {
+	err_msg(39, "last_tstamp: arg is not an array reference");
+    }
+
+    # look for the most recent tstamp
+    #
+    foreach $i (@$list) {
+
+	# filename must be well formed
+	#
+	if ($i =~ /\.\d{9,10}\-(\d{9,10})\.gz$/ ||
+	    $i =~ /\.\d{9,10}\-(\d{9,10})$/) {
+	    $tstamp1 = $1;
+	    if ((defined $last && $last < $tstamp1) || !defined $last) {
+	    	$last = $tstamp1;
+	    }
+	}
+    }
+
+    # return most recent tstamp or undef
+    #
+    return $last;
+}
+
+
 # split_list - split a list of files into single, double, gz and index files
 #
 # given:
-#	($status, $single, $gz, $plain, $double, $index) = split_list(\@list);
+#	($status, $gz, $plain, $double, $index) = split_list(\@list);
 #
 #	@list		a list of archived files (from scan_dir, for example)
 #
@@ -1687,7 +1702,6 @@ sub clean_list(@)
 #    $status:
 #	0 ==> scan was unsuccessful
 #	1 ==> scan was successful or ignored
-#    @{$single}		files of the form name\.\d{9,10}
 #    @{$gz}		files of the form name\.\d{9,10}\-\d{9,10}\.gz
 #    @{$plain}		files of the form name\.\d{9,10}\-\d{9,10}
 #    @{$double}		both @gz and @plain files
@@ -1697,7 +1711,6 @@ sub split_list(@)
 {
     my ($list) = @_;	# get args
     my $status;		# subroutine return status
-    my @single;		# files of the form name\.\d{9,10}
     my @gz;		# files of the form name\.\d{9,10}\-\d{9,10}\.gz
     my @plain;		# files of the form name\.\d{9,10}\-\d{9,10}
     my @double;		# both @gz and @plain files
@@ -1707,12 +1720,11 @@ sub split_list(@)
     # verify that we were given references to arrays
     #
     if (!defined $list || ref($list) ne 'ARRAY') {
-	err_msg(39, "split_list: arg is not an array reference");
+	err_msg(40, "split_list: arg is not an array reference");
     }
 
     # truncate lists
     #
-    $#single = -1;
     $#gz = -1;
     $#plain = -1;
     $#double = -1;
@@ -1722,14 +1734,9 @@ sub split_list(@)
     #
     foreach $i (@$list) {
 
-	# record file\.\d{9,10} files
-	#
-	if ($i =~ /\.\d{9,10}$/) {
-	    push(@single, $i);
-
 	# record file\.\d{9,10}\-\d{9,10}\.gz files (also as double files)
 	#
-	} elsif ($i =~ /\.\d{9,10}\-\d{9,10}\.gz$/) {
+	if ($i =~ /\.\d{9,10}\-\d{9,10}\.gz$/) {
 	    push(@gz, $i);
 	    push(@double, $i);
 
@@ -1747,17 +1754,17 @@ sub split_list(@)
 	# we should not get here
 	#
 	} else {
-	    err_msg(40, "split_list: found bogus member of file list: $i");
+	    err_msg(41, "split_list: found bogus member of file list: $i");
 	}
     }
 
     # return the results
     #
-    return ($true, \@single, \@gz, \@plain, \@double, \@index);
+    return ($true, \@gz, \@plain, \@double, \@index);
 }
 
 
-# rm_cycles - split a list of files into single, double, gz and index files
+# rm_cycles - split a list of files into gz and index files
 #
 # given:
 #	rm_cycles(\@plain, \@double)
@@ -1780,7 +1787,7 @@ sub rm_cycles(@@)
     #
     if (!defined $plain || ref($plain) ne 'ARRAY' ||
         !defined $double || ref($double) ne 'ARRAY') {
-	err_msg(41, "split_list: args are not an array references");
+	err_msg(42, "rm_cycles: args are not an array references");
     }
 
     # Remove all but the oldest $cycle-1 files found in @$double
@@ -1811,196 +1818,149 @@ sub rm_cycles(@@)
 }
 
 
-# clean_tstamp - prune away too many file.tstamp files
+# gzip_or_move - gzip or move a file into the appropriate directory
 #
 # usage:
-#	clean_tstamp($file, \@single);
-#
-#	$file	path of the file being archived
-#	@single		files of the form name\.\d{9,10}
-#
-# This function will perform actions as given in step 3 when more than
-# one file of the form file.tstamp exists.  We will look to see if one
-# of these files are hardlinked to the file being archived.  If yes, then
-# all other file.tstamp files will be removed.  If no, then all but the
-# newest file.tstamp file will be removed.
-#
-sub clean_tstamp($@)
-{
-    my ($file, $list) = @_;		# get args
-    my $f_dev;				# dev number of $file
-    my $f_inum;				# inode number of $file
-    my $f_links;			# link count for $file
-    my $t_dev;				# dev number of a file.tstamp file
-    my $t_inum;				# inode number of a file.tstamp file
-    my $t_links;			# link count for a file.tstamp file
-    my $keepname;			# file.tstamp file to keep
-    my $i;
-
-    # verify that the list arg is an array reference
-    #
-    if (!defined($list) || ref($list) ne 'ARRAY') {
-	err_msg(42, "clean_tstamp: 2nd argument is not an array reference");
-    }
-
-    # stat the file being archived
-    #
-    ($f_dev, $f_inum, undef, $f_links, undef) = stat($file);
-    if (!defined $f_dev || !defined $f_inum || !defined $f_links) {
-	err_msg(43, "clean_tstamp: failed to stat $file");
-    }
-
-    # If the file is linked to another file, look to see if any
-    # of the file.tstamps are that file
-    #
-    if ($f_links > 1) {
-
-	# look for a file.tstamp file linked to file
-	for $i ( reverse @$list ) {
-	    ($t_dev, $t_inum, undef, $t_links, undef) = stat($i);
-	    if (defined $t_links && $f_links == $t_links &&
-	        defined $t_dev && $f_dev == $t_dev &&
-	        defined $t_inum && $f_inum == $t_inum) {
-		# found a linked file.tstamp file
-		print "DEBUG: $file is linked to $i\n" if $verbose;
-		$keepname = $i;
-		last;
-	    }
-	}
-
-	# pick the newest $tstamp file of not linked file.tstamp file was found
-	#
-	if (! defined $keepname) {
-	    $keepname = $$list[$#$list];
-	}
-
-    # The file is not linked to any file, keep the newest file.tstamp file
-    #
-    } else {
-	$keepname = $$list[$#$list];
-    }
-
-    # Remove all but the one file.tstamp file are are keeping
-    #
-    print "DEBUG: remove all tstamp files except: $keepname\n" if $verbose;
-    for $i ( @$list ) {
-
-	# keep the keeper file
-	#
-	next if $i eq $keepname;
-
-	# remove tstamp file with an explanation
-	#
-	if ($f_links > 1) {
-	    rm($i, "removing extra unlinked tstamp file");
-    	} else {
-	    rm($i, "removing older tstamp file");
-	}
-    }
-
-    # Clean out the single list
-    #
-    $#$list = 0;
-    $$list[0] = $keepname;
-}
-
-
-# gzip - gzip a file into the appropriate directory
-#
-# usage:
-#	gzip($file, $inplace, $dir)
+#	gzip_or_move($file, $inplace, $dir, $target)
 #
 #	$file		file to gzip
-#	$inplace	if true, gzip $file inplace in its current directory
-#	$dir		if $inplace is false, gzip $file into this directory
+#	$need_gzip	TRUE ==> gzip file, FALSE ==> move file
+#	$inplace	TRUE ==> gzip $file inplace in its current directory
+#	$target		$inplace ==> FALSE, move/gzip into $target directory
 #
 # returns:
-#	0 ==> gzip was unsuccessful
-#	1 ==> gzip was successful or was disabled (by -n or -1)
+#	0 ==> gzip/move was unsuccessful
+#	1 ==> gzip/move was successful or was disabled by -n
 #
 # We gzip by running the gzip command in a child process.
 #
-sub gzip($$$)
+# NOTE: When $need_gzip == FALSE and $inplace == TRUE then this function is
+#	does nothing.
+#
+# NOTE: Warns but does not return 0 if the chmod fails.  By the time
+#	the chmod is done, the file has either been gziped or it
+#	have been moved.
+#
+# NOTE: No chmod is done if $need_gzip == FALSE and $inplace == TRUE.
+#
+sub gzip_or_move($$$$)
 {
-    my ($file, $inplace, $dir) = @_;	# get args
-    my $pid;				# gzip process id
+    my ($file, $need_gzip, $inplace, $target) = @_;	# get args
     my $base;				# basename of file
 
-    # -l blocks all gziping
+    # firewall
     #
-    if (defined $opt_l) {
-	print "DEBUG: gzip of $file skipped due to use of -l\n" if $verbose;
+    if (! defined $file || ! defined $need_gzip ||
+        ! defined $inplace || ! defined $target) {
+	error(20, "gzip_or_move: undef args");
+    }
+
+    # Do nothing if we are 'moving in place'
+    #
+    if (! $need_gzip && $inplace) {
+	if (defined $opt_n) {
+	    print "# $file will not be gziped or moved\n" if $verbose;
+	} else {
+	    print "DEBUG: $file is not gziped or moved\n" if $verbose;
+	}
 	return $true;
     }
 
+    # prep
+    #
+    $file = untaint($file);
+    $target = untaint($target);
+    $base = basename($file);
+
     # gzip file in place
     #
-    $base = basename($file);
-    if ($inplace) {
+    if ($need_gzip && $inplace) {
 
 	# do nothing if -n
 	#
 	if (defined $opt_n) {
-	    print "$gzip --best -f -q $file\n";
+	    print "$gzip_prog --best -f -q $file\n";
 	    printf("chmod 0%03o $file.gz\n", $archive_mode);
-	    return $false;
+	    return $true;
 	}
 
 	# fork/exec gzip of the file
 	#
-	if (system("$gzip", "--best", "-f", "-q", "$file") != 0) {
-	    warn_msg(44, "$gzip --best -f -q $file failed: $!");
+	if (system("$gzip_prog", "--best", "-f", "-q", "$file") != 0) {
+	    warn_msg(43, "$gzip_prog --best -f -q $file failed: $!");
 	    return $false;
 	}
-	print "DEBUG: $gzip --best -f -q $file\n" if $verbose;
+	print "DEBUG: $gzip_prog --best -f -q $file\n" if $verbose;
 
 	# chmod the archived file
 	#
-	$file = untaint($file);
 	if (chmod($archive_mode, "$file.gz") != 1) {
-	    warn_msg(45, "chmod 0%03o $file.gz failed", $archive_mode);
+	    warn_msg(44, "chmod 0%03o $file.gz failed", $archive_mode);
 	}
 	printf("DEBUG: chmod 0%03o $file.gz\n", $archive_mode) if $verbose;
 
-    # gzip the file into $dir
+    # gzip the file into $target
     #
-    } else {
+    } elsif ($need_gzip && ! $inplace) {
 
 	# do nothing if -n
 	#
 	if (defined $opt_n) {
-	    print "/bin/mv -f $file $dir/$base &&\n";
-	    print "$gzip --best -f -q $dir/$base\n";
-	    printf("chmod 0%03o $dir/$base.gz\n", $archive_mode);
+	    print "/bin/mv -f $file $target/$base &&\n";
+	    print "$gzip_prog --best -f -q $target/$base\n";
+	    printf("chmod 0%03o $target/$base.gz\n", $archive_mode);
 	    return $true;
 	}
 
 	# move file to the new directory
 	#
-	$file = untaint($file);
-	$dir = untaint($dir);
-	$base = untaint($base);
-	if (copy("$file", "$dir/$base") != 1) {
-	    warn_msg(46, "failed to cp $file $dir/$base: $!\n");
+	if (move($file, "$target/$base") != 1) {
+	    warn_msg(45, "failed to mv $file $target/$base: $!\n");
 	    return $false;
 	}
-	print "DEBUG: cp $file $dir/$base\n" if $verbose;
-	rm("$file", "already moved file to $dir");
 
 	# gzip the file in dir
 	#
-	if (system("$gzip", "--best", "-f", "-q", "$dir/$base") != 0) {
-	    warn_msg(47, "$gzip --best -f -q $dir/$base failed: $!");
+	if (system("$gzip_prog", "--best", "-f", "-q", "$target/$base") != 0) {
+	    warn_msg(46, "$gzip_prog --best -f -q $target/$base failed: $!");
 	    return $false;
 	}
-	print "DEBUG: $gzip --best -f -q $dir/$base\n" if $verbose;
+	print "DEBUG: $gzip_prog --best -f -q $target/$base\n" if $verbose;
 
 	# chmod the archived file
 	#
-	if (chmod($archive_mode, "$dir/$base.gz") != 1) {
-	    warn_msg(48, "chmod 0%03o $dir/$base.gz failed",$archive_mode);
+	if (chmod($archive_mode, "$target/$base.gz") != 1) {
+	    warn_msg(47, "chmod 0%03o $target/$base.gz failed",$archive_mode);
 	}
-	printf("DEBUG: chmod 0%03o $dir/$base.gz\n", $archive_mode) if $verbose;
+	printf("DEBUG: chmod 0%03o $target/$base.gz\n", $archive_mode)
+	    if $verbose;
+
+    # move the file into $target
+    #
+    } elsif (! $need_gzip && ! $inplace) {
+
+	# do nothing if -n
+	#
+	if (defined $opt_n) {
+	    print "/bin/mv -f $file $target/$base &&\n";
+	    printf("chmod 0%03o $target/$base.gz\n", $archive_mode);
+	    return $true;
+	}
+
+	# move file to the new directory
+	#
+	if (move($file, "$target/$base") != 1) {
+	    warn_msg(48, "failed to mv $file $target/$base: $!\n");
+	    return $false;
+	}
+
+	# chmod the moved file
+	#
+	if (chmod($archive_mode, "$target/$base") != 1) {
+	    warn_msg(49, "chmod 0%03o $target/$base failed",$archive_mode);
+	}
+	printf("DEBUG: chmod 0%03o $target/$base\n", $archive_mode)
+	    if $verbose;
     }
     return $true;
 }
@@ -2031,7 +1991,7 @@ sub hard_link($$)
     ($f_dev, $f_inum, undef, $f_links) = stat($from);
     if (! -f $from ||
         !defined $f_dev || !defined $f_inum || !defined $f_links) {
-	warn_msg(49, "hard_link: cannot stat or no such file: $from");
+	warn_msg(50, "hard_link: cannot stat or no such file: $from");
 	return $false;
     }
 
@@ -2059,7 +2019,7 @@ sub hard_link($$)
     #
     rm($to, "removed prior to hard linking of $from") if -f $to;
     if (link($from, $to) <= 0) {
-	warn_msg(50, "failed to hardlink $from onto $to");
+	warn_msg(51, "failed to hardlink $from onto $to");
 	return $false;
     }
     print "DEBUG: ln $from $to\n" if $verbose;
@@ -2087,7 +2047,6 @@ sub archive($$$$)
 {
     my ($file, $dir, $gz_dir, $have_archive) = @_;	# get args
     my $list;		# @{$list} of archived files
-    my $single;		# @{$files} of the form file\.\d{9,10}
     my $gz;		# @{$files} of the form file\.\d{9,10}\-\d{9,10}\.gz
     my $plain;		# @{$files} of the form file\.\d{9,10}\-\d{9,10}
     my $double;		# @gz and @plain @{$files}
@@ -2096,12 +2055,19 @@ sub archive($$$$)
     my $now;		# seconds since the epoch of now
     my $status;		# return status from subroutine
     my $tstamp2;	# new file of the form file\.\d{9,10}\-\d{9,10}
+    my $old_file;	# $file linked as OLD/$base.$old_file-$now
+    my $need_gzip;	# TRUE ==> gzip file, FALSE ==> move file
     my $i;
 
     # prep work
     #
     $base = basename($file);
     $now = time();
+    if (defined $opt_L) {
+	$need_gzip = $false;	# move files
+    } else {
+	$need_gzip = $true;	# gzip files
+    }
 
     # step 0 - Determine if /a/path/file exists
     #
@@ -2129,7 +2095,7 @@ sub archive($$$$)
 	    } else {
 		if (! safe_file_create($file, $file_uid, $file_gid,
 					$file_mode, $false, undef, undef)) {
-		    warn_msg(51, "could not exclusively create $file");
+		    warn_msg(52, "could not exclusively create $file");
 		    return $false;
 		}
 	    }
@@ -2138,7 +2104,7 @@ sub archive($$$$)
 	# verify that the file still exists
 	#
 	if (! defined $opt_n && ! -f $file) {
-	    warn_msg(52, "created $file and now it is missing");
+	    warn_msg(53, "created $file and now it is missing");
 	    return $false;
 	}
     }
@@ -2156,83 +2122,70 @@ sub archive($$$$)
     #
     if (! (($status, $list) = scan_dir($file, $base, "$dir/$oldname",
 					 "$dir/$oldname/archive")) ) {
-	warn_msg(53, "failed to scan $dir/$oldname\n");
+	warn_msg(54, "failed to scan $dir/$oldname\n");
 	return $false;
     }
     clean_list($list);
-    if (! (($status,$single,$gz,$plain,$double,$indx) = split_list($list)) ) {
-	warn_msg(54, "splitlist failed on $file\'s dirs\n");
+    if (! (($status,$gz,$plain,$double,$indx) = split_list($list)) ) {
+	warn_msg(55, "splitlist failed on $file\'s dirs\n");
 	return $false;
     }
     if ($cycle > 0 && scalar(@{$double}) >= $cycle) {
 	rm_cycles($plain, $double);
     }
 
-    # step 3 - deal with too many file.timestamp files
-    #
-    if (scalar(@{$single}) > 1) {
-	clean_tstamp($file, $single);
-    }
-
-    # step 4 - gzip all file.tstamp1-tstamp2 files
+    # step 3 - gzip or move (of -L) all file.tstamp1-tstamp2 files
     #
     if (scalar(@{$plain}) > 0) {
 
-	# gzip each plain file
+	# gzip or move (of -L) each plain file
 	#
 	# If we have an archive dir, all plain files in the archive dir
-	# will be gziped in place.   However plain files directly under
-	# the OLD dir will be gziped into the archive directory.
+	# will be gziped in place and all plain files in the
+	# OLD dir will be gziped into the archive directory.
 	#
 	# If we do not have an archive dir, all plain files will be
 	# gziped in place.
 	#
 	for ($i = 0; $i <= $#$plain; ++$i) {
 
-	    # gzip files in place
+	    # gzip or move files in place
 	    #
 	    if (! $have_archive || $$plain[$i] =~ m#/archive/[^/]+$#) {
 
 		# gzip the file in place
-		gzip($$plain[$i], $true, undef);
+		gzip_or_move($$plain[$i], $need_gzip, $true, $gz_dir);
 
 	    # gzip the file into the archive dir
+	    #
+	    # If '-A archive' was given ($have_archive TRUE) so files will
+	    # be gziped into the $gz_dir (which is under OLD/archive);
 	    #
 	    } else {
 
 		# gzip the file into the archive dir
-		gzip($$plain[$i], $false, $gz_dir);
+		gzip_or_move($$plain[$i], $need_gzip, $false, $gz_dir);
 	    }
 	}
     }
 
-    # step 5 - force file to be hardlinked to file.tstamp
+    # step 4 - Hard link /a/path/file to /a/path/OLD/file.tstamp_last-now
     #
-    if (scalar(@{$single}) < 1) {
-	print "DEBUG: no file.tstamp file, forming for $base\n" if $verbose;
-	if (defined $opt_n) {
-	    print "ln -f $file $dir/$oldname/$base.$now\n";
-	} else {
-	    if (! hard_link($file, "$dir/$oldname/$base.$now")) {
-		warn_msg(55, "failed to hardlink $file onto %s",
-			  "$dir/$oldname/$base.$now");
-		return $false;
-	    }
-	}
-	push(@{$single}, "$dir/$oldname/$base.$now");
+    $old_file = last_tstamp($list);
+    $old_file = $now if ! defined $old_file;
+    $old_file = "$dir/$oldname/$base.$old_file-$now";
+    print "DEBUG: last timestamp: $old_file\n" if $verbose;
+    if (defined $opt_n) {
+	print "ln -f $file $old_file\n";
     } else {
-	if (defined $opt_n) {
-	    print "ln -f $file $$single[0]\n";
-	} else {
-	    if (! hard_link($file, $$single[0])) {
-		warn_msg(56, "failed to hardlink $file onto $$single[0]");
-		return $false;
-	    }
+	if (! hard_link($file, "$old_file")) {
+	    warn_msg(56, "failed to hardlink $file onto %s", $old_file);
+	    return $false;
 	}
     }
 
-    # step 6 - Create /a/path/.file.new with the proper mode, uid and gid
-    # step 7 - Move /a/path/.file.new to /a/path/file
+    # step 5 - Create /a/path/.file.new with the proper mode, uid and gid
+    # step 6 - Move /a/path/.file.new to /a/path/file
     #
     if (defined $opt_n) {
 	if (-f "$dir/.$base.new") {
@@ -2256,75 +2209,43 @@ sub archive($$$$)
     }
     print "DEBUG: created new $file\n" if $verbose;
 
-    # step 8 - /a/path/OLD/file.tstamp renamed /a/path/OLD/file.tstamp-now
-    #				    or /a/path/OLD/archive/file.tstamp-now
+    # step 7 - if -i then process the index files for the file.tstamp-now
     #
-    $tstamp2 = untaint("$$single[0]-$now");
-    $$single[0] = untaint($$single[0]);
-    if (defined $opt_n) {
-	print "mv -f $$single[0] $tstamp2\n";
-	printf("chmod 0%03o $tstamp2\n", $archive_mode);
-    } else {
-    	if (!rename ($$single[0], $tstamp2)) {
-	    warn_msg(58, "failed to rename $$single[0] to $tstamp2");
-	    return $false;
-	}
-	print "DEBUG: mv -f $$single[0] $tstamp2\n" if $verbose;
-	if (chmod($archive_mode, $tstamp2) != 1) {
-	    warn_msg(59, "chmod 0%03o $tstamp2 failed", $archive_mode);
-	}
-	printf("DEBUG: chmod 0%03o $tstamp2\n", $archive_mode) if $verbose;
-    }
-
-    # step 9 - The file /a/path/file is hardlinked to /a/path/OLD/file.now
-    #
-    if (defined $opt_n) {
-	print "ln -f $file $dir/$oldname/$base.$now\n";
-    } else {
-	if (! hard_link($file, "$dir/$oldname/$base.$now")) {
-	    warn_msg(60, "failed to hardlink $file onto %s",
-		      "$dir/$oldname/$base.$now");
-	    return $false;
-	}
-    }
-
-    # step 10 - if -i then process the index files for the file.tstamp-now
-    #
-    # We continue on to step 11 even if something goes wrong with indexing
+    # We continue on to step 8 even if something goes wrong with indexing
     # because an indexing failure should not impact later steps.
     #
     if (defined $opt_i) {
 	if ($opt_n) {
-	    print "$indx_prog $$single[0]-$now $$single[0]-$now.indx\n";
-	    printf("chmod 0%03o $$single[0]-$now.indx\n", $archive_mode);
+	    print "$indx_prog $old_file\n";
+	    printf("chmod 0%03o last_tstamp\n", $archive_mode);
 	} else {
-	    print "DEBUG: $indx_prog $$single[0]-$now $$single[0]-$now.indx\n"
+	    print "DEBUG: $indx_prog $old_file\n"
 		    if $verbose;
-	    if (system("$indx_prog", "$$single[0]-$now",
-	    		"$$single[0]-$now.indx") != 0) {
-		warm_msg(61, "$indx_prog $$single[0]-$now " .
-			      "$$single[0]-$now.indx failed");
+	    if (system("$indx_prog", "$old_file",
+	    	       "$old_file.indx") != 0) {
+		warm_msg(58, "$indx_prog $old_file " .
+			     "$old_file.indx failed");
 	    }
-	    if (-f "$$single[0]-$now.indx") {
-		if (chmod($archive_mode, "$$single[0]-$now.indx") != 1) {
-		    warn_msg(62, "chmod 0%03o $$single[0]-$now.indx failed",
+	    if (-f "$old_file.indx") {
+		if (chmod($archive_mode, "$old_file.indx") != 1) {
+		    warn_msg(59, "chmod 0%03o $old_file.indx failed",
 		    		  $archive_mode);
 		}
-		printf("DEBUG: chmod 0%03o $$single[0]-$now.indx\n",
+		printf("DEBUG: chmod 0%03o $old_file.indx\n",
 			$archive_mode) if $verbose;
 	    } else {
-		warn_msg(63, "index file wasn't made: $$single[0]-$now.indx");
+		warn_msg(60, "index file wasn't made: $old_file.indx");
 	    }
 	}
     }
 
-    # step 11 - If -1 was given, the gzip /a/path/OLD/file.tstamp-now
+    # step 8 - If -1 was given, the gzip /a/path/OLD/file.tstamp-now
     #
     if (defined $opt_1) {
-	if (! $have_archive) {
-	    gzip($tstamp2, $true, undef);
+	if ($have_archive) {
+	    gzip_or_move($old_file, $need_gzip, $false, $gz_dir);
 	} else {
-	    gzip($tstamp2, $false, $gz_dir);
+	    gzip_or_move($old_file, $need_gzip, $true, $gz_dir);
 	}
     }
 
