@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.16 $
-# @(#) $Id: savelog.pl,v 1.16 2000/01/30 09:58:06 chongo Exp chongo $
+# @(#) $Revision: 1.18 $
+# @(#) $Id: savelog.pl,v 1.18 2000/01/30 11:15:47 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -386,8 +386,7 @@
 #	5) If /a/path/OLD/file.tstamp is not hard linked to /a/path/file,
 #	   when remove /a/path/OLD/file.tstamp and relink /a/path/file to it.
 #	   If /a/path/OLD/file.tstamp does not exist, then link /a/path/file
-#	   to /a/path/OLD.file.now-tstamp where 'now-tstamp' is the current
-#	   timestamp.
+#	   to /a/path/OLD.file.now where 'now' is the current timestamp.
 #
 #	   Assertion: /a/path/OLD/file.tstamp exists and is hard linked
 #		      to /a/path/file.
@@ -513,8 +512,6 @@ MAIN:
     my $dir;		# preped directory in which $file resides
     my $gz_dir;		# where .gz files are to be placed
 
-$opt_n = 1;	# XXX - DEBUG
-
     # setup
     #
     $exit_val = 0;	# hope for the best
@@ -537,6 +534,8 @@ $opt_n = 1;	# XXX - DEBUG
     # parse args
     #
     &parse();
+
+# $opt_n = 1;	# XXX - DEBUG
 
 # # XXX - debug
 # #
@@ -1000,14 +999,14 @@ sub prepfile($\$\$\$)
 		printf("DEBUG: chmoded %s from 0%03o to 0%03o\n",
 		       $gz_dir, $mode, $archdir_mode) if $verbose;
 	    } else {
-		&warn_msg(29,
+		&warn_msg(27,
 		    "unable to chmod 0%03o archive directory: %s",
 		    $archdir_mode, $gz_dir);
 		return $false;
 	    }
 	}
 	if (! -w $gz_dir) {
-	    &warn_msg(30, "archive directory: $gz_dir is not writable");
+	    &warn_msg(28, "archive directory: $gz_dir is not writable");
 	    return $false;
 	}
     }
@@ -1157,7 +1156,7 @@ sub loaddir($\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(31, "loaddir: 2nd argument is not an array reference");
+	&err_msg(29, "loaddir: 2nd argument is not an array reference");
     }
 
     # if we found it in the cache, return the cached files
@@ -1173,7 +1172,7 @@ sub loaddir($\@)
     # prep for scanning dir
     #
     if (! opendir DIR, $dir) {
-	&warn_msg(32, "unable to open dir: $dir");
+	&warn_msg(30, "unable to open dir: $dir");
 	return $false;
     }
 
@@ -1199,19 +1198,20 @@ sub loaddir($\@)
 # scan_dir - scan the OLD and possibly archive dir for archived files
 #
 # usage:
-#	&scan_dir($file, $olddir, $archdir, \@filelist)
+#	&scan_dir($file, $base, $olddir, $archdir, \@filelist)
 #
-#	$file	archived file to scan for in $olddir or $archdir
+#	$file		archived file to scan for in $olddir or $archdir
+#	$base		basename of $file
 #	$olddir		OLD directory name to scan in
 #	$archdir	if defined, name of OLD/archive to scan for
 #	\@filelist	list of files found
 #
 # We will look for files of the form:
 #
-#	file\.\d{10}
-#	file\.\d{10}\-\d{10}
-#	file\.\d{10}\-\d{10}\.gz
-#	file\.\d{10}\-\d{10}\.indx
+#	file\.\d{9,10}
+#	file\.\d{9,10}\-\d{9,10}
+#	file\.\d{9,10}\-\d{9,10}\.gz
+#	file\.\d{9,10}\-\d{9,10}\.indx
 #
 # directly under:
 #
@@ -1224,10 +1224,10 @@ sub loaddir($\@)
 #
 # NOTE: We will return the list sorted by timestamp
 #
-sub scan_dir($$$\@)
+sub scan_dir($$$$\@)
 {
-    my ($file, $olddir, $archdir, $list) = @_;	# get args
-    my @filelist;	# files found under $dir
+    my ($file, $base, $olddir, $archdir, $list) = @_;	# get args
+    my @filelist;					# files found under $dir
     my $i;
 
     # verify that the list arg is an array reference
@@ -1236,14 +1236,14 @@ sub scan_dir($$$\@)
 	&err_msg(31, "scan_dir: 4th argument is not an array reference");
     }
 
-    # scan OLD/ for files of the form file\.\d{10}
+    # scan OLD/ for files of the form base\.\d{9,10}
     #
-    print "DEBUG: scanning $olddir for $file tstamp files\n" if $verbose;
+    print "DEBUG: scanning $olddir for $base tstamp files\n" if $verbose;
     if (! &loaddir($olddir, \@filelist)) {
 	&warn_msg(32, "unable to open OLD dir: $olddir");
 	return $false;
     }
-    @$list = sort grep m#/$file\.\d{10}$#, @filelist;
+    @$list = sort grep m#/$base\.\d{9,10}$#, @filelist;
 
     # scan OLD/archive if it exists
     #
@@ -1251,25 +1251,25 @@ sub scan_dir($$$\@)
 
 	# scan the OLD/archive/
 	#
-	print "DEBUG: scanning $archdir for $file files\n" if $verbose;
+	print "DEBUG: scanning $archdir for $base files\n" if $verbose;
 	if (! &loaddir($archdir, \@filelist)) {
 	    &warn_msg(33, "cannot open OLD/archive dir: $archdir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$file\.\d{10}\-\d{10}$|/$file\.\d{10}\-\d{10}\.gz$|/$file\.\d{10}\-\d{10}\.indx$#, @filelist);
+	push(@$list, sort grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
 
-    # otherwise scan OLD for file\.\d{10}\-\d{10} and .gz and .indx files
+    # otherwise scan OLD for base\.\d{9,10}\-\d{9,10} and .gz and .indx files
     #
     } else {
 
 	# scan the OLD/ again
 	#
-	print "DEBUG: scanning $olddir for $file files\n" if $verbose;
+	print "DEBUG: scanning $olddir for $base files\n" if $verbose;
 	if (! &loaddir($olddir, \@filelist)) {
-	    &warn_msg(28, "can't open OLD/archive dir: $olddir");
+	    &warn_msg(34, "can't open OLD/archive dir: $olddir");
 	    return $false;
 	}
-	push(@$list, sort grep m#/$file\.\d{10}\-\d{10}$|/$file\.\d{10}\-\d{10}\.gz$|/$file\.\d{10}\-\d{10}\.indx$#, @filelist);
+	push(@$list, sort grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @filelist);
     }
 }
 
@@ -1300,13 +1300,11 @@ sub rm($$)
 
 	# untaint $file
 	#
-	if ($file =~ m#^/# || $file =~ m#^\.\.\/# ||
-	    $file =~ m#^/\.\./"#) {
-	    &warn_msg(29, "unsafe file to remove: $file");
-	    return;
-	}
 	if ($file =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	    $file = $1;
+	} else {
+	    &warn_msg(35, "unsafe file to remove: $file");
+	    return;
 	}
 
 	# unlink
@@ -1315,7 +1313,7 @@ sub rm($$)
 	    print "DEBUG: rm $file\n" if $verbose;
 
 	} else {
-	    &warn_msg(30, "cannot remove $file\n");
+	    &warn_msg(36, "cannot remove $file\n");
 	}
     }
 }
@@ -1337,7 +1335,7 @@ sub clean_list(\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(31, "clean_list: 2nd argument is not an array reference");
+	&err_msg(37, "clean_list: 2nd argument is not an array reference");
     }
 
     # do nothing if the list has 1 or 0 files in it
@@ -1358,7 +1356,7 @@ sub clean_list(\@)
 	# firewall - catch dup and bogus sorting
 	#
 	if ($prev eq $cur) {
-	    &err_msg(32, "clean_list: found duplicate list item: $cur");
+	    &err_msg(38, "clean_list: found duplicate list item: $cur");
 	}
 
 	# catch foo and foo.gz and remove foo
@@ -1391,11 +1389,11 @@ sub clean_list(\@)
 #	&split_list(\@list, \@single, \@gz, \@plain, \@double, \@index)
 #
 #	@list		a list of archived files (from scan_dir, for example)
-#	@single		files of the form name\.\d{10}
-#	@gz		files of the form name\.\d{10}\-\d{10}\.gz
-#	@plain		files of the form name\.\d{10}\-\d{10}
+#	@single		files of the form name\.\d{9,10}
+#	@gz		files of the form name\.\d{9,10}\-\d{9,10}\.gz
+#	@plain		files of the form name\.\d{9,10}\-\d{9,10}
 #	@double		both @gz and @plain files
-#	@index		files of the form name\.\d{10}\-\d{10}\.inedx
+#	@index		files of the form name\.\d{9,10}\-\d{9,10}\.inedx
 #
 sub split_list(\@\@\@\@\@\@)
 {
@@ -1409,7 +1407,7 @@ sub split_list(\@\@\@\@\@\@)
 	ref($list) ne 'ARRAY' || ref($single) ne 'ARRAY' ||
 	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
 	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
-	&err_msg(33, "split_list: arg(s) are not an array reference");
+	&err_msg(39, "split_list: arg(s) are not an array reference");
     }
 
     # truncate lists
@@ -1424,32 +1422,32 @@ sub split_list(\@\@\@\@\@\@)
     #
     foreach $i (@$list) {
 
-	# record file\.\d{10} files
+	# record file\.\d{9,10} files
 	#
-	if ($i =~ /\.\d{10}$/) {
+	if ($i =~ /\.\d{9,10}$/) {
 	    push(@$single, $i);
 
-	# record file\.\d{10}\-\d{10}\.gz files (also as double files)
+	# record file\.\d{9,10}\-\d{9,10}\.gz files (also as double files)
 	#
-	} elsif ($i =~ /\.\d{10}\-\d{10}\.gz$/) {
+	} elsif ($i =~ /\.\d{9,10}\-\d{9,10}\.gz$/) {
 	    push(@$gz, $i);
 	    push(@$double, $i);
 
-	# record file\.\d{10}\-\d{10} files (also as double files)
+	# record file\.\d{9,10}\-\d{9,10} files (also as double files)
 	#
-	} elsif ($i =~ /\.\d{10}\-\d{10}$/) {
+	} elsif ($i =~ /\.\d{9,10}\-\d{9,10}$/) {
 	    push(@$plain, $i);
 	    push(@$double, $i);
 
-	# record file\.\d{10}\-\d{10}\.indx files
+	# record file\.\d{9,10}\-\d{9,10}\.indx files
 	#
-	} elsif ($i =~ /\.\d{10}\-\d{10}\.indx$/) {
+	} elsif ($i =~ /\.\d{9,10}\-\d{9,10}\.indx$/) {
 	    push(@$index, $i);
 
 	# we should not get here
 	#
 	} else {
-	    &err_msg(34, "split_list: found bogus member of file list: $i");
+	    &err_msg(40, "split_list: found bogus member of file list: $i");
 	}
     }
 }
@@ -1460,11 +1458,11 @@ sub split_list(\@\@\@\@\@\@)
 # given:
 #	&rm_cycles(\@single, \@gz, \@plain, \@double, \@index)
 #
-#	@single		files of the form name\.\d{10}
-#	@gz		files of the form name\.\d{10}\-\d{10}\.gz
-#	@plain		files of the form name\.\d{10}\-\d{10}
+#	@single		files of the form name\.\d{9,10}
+#	@gz		files of the form name\.\d{9,10}\-\d{9,10}\.gz
+#	@plain		files of the form name\.\d{9,10}\-\d{9,10}
 #	@double		both @gz and @plain files
-#	@index		files of the form name\.\d{10}\-\d{10}\.inedx
+#	@index		files of the form name\.\d{9,10}\-\d{9,10}\.inedx
 #
 # This function will all but the last $cycle-1 files found in \@double.
 # We remove all but the last (most recent) $cycle-1 files instead of
@@ -1486,7 +1484,7 @@ sub rm_cycles(\@\@\@\@\@)
 	ref($single) ne 'ARRAY' ||
 	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
 	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
-	&err_msg(35, "split_list: arg(s) are not an array reference");
+	&err_msg(41, "split_list: arg(s) are not an array reference");
     }
 
     # Remove all but the oldest $cycle-1 files found in @$double
@@ -1518,7 +1516,7 @@ sub rm_cycles(\@\@\@\@\@)
 #	&clean_tstamp($file, \@single);
 #
 #	$file	path of the file being archived
-#	@single		files of the form name\.\d{10}
+#	@single		files of the form name\.\d{9,10}
 #
 # This function will perform actions as given in step 3 when more than
 # one file of the form file.tstamp exists.  We will look to see if one
@@ -1541,14 +1539,14 @@ sub clean_tstamp($\@)
     # verify that the list arg is an array reference
     #
     if (!defined($list) || ref($list) ne 'ARRAY') {
-	&err_msg(36, "clean_tstamp: 2nd argument is not an array reference");
+	&err_msg(42, "clean_tstamp: 2nd argument is not an array reference");
     }
 
     # stat the file being archived
     #
     ($f_dev, $f_inum, undef, $f_links, undef) = stat($file);
     if (!defined $f_dev || !defined $f_inum || !defined $f_links) {
-	&err_msg(37, "clean_tstamp: failed to stat $file");
+	&err_msg(43, "clean_tstamp: failed to stat $file");
     }
 
     # If the file is linked to another file, look to see if any
@@ -1625,7 +1623,7 @@ sub gzip($$$)
 {
     my ($file, $inplace, $dir) = @_;	# get args
     my $pid;				# gzip process id
-    my $basename;			# basename of file
+    my $base;				# basename of file
 
     # -1 blocks all gziping
     #
@@ -1636,6 +1634,7 @@ sub gzip($$$)
 
     # gzip file in place
     #
+    $base = basename($file);
     if ($inplace) {
 
 	# do nothing if -n
@@ -1648,7 +1647,7 @@ sub gzip($$$)
 	# fork/exec gzip of the file
 	#
 	if (system("$gzip", "--best", "-f", "-q", "$file") != 0) {
-	    &warn_msg(38, "$gzip --best -f -q $file failed: $!");
+	    &warn_msg(44, "$gzip --best -f -q $file failed: $!");
 	    return $false;
 	}
 	print "DEBUG: $gzip --best -f -q $file\n" if $verbose;
@@ -1659,30 +1658,107 @@ sub gzip($$$)
 
 	# do nothing if -n
 	#
-	$basename = basename($file);
 	if (defined $opt_n) {
-	    print "/bin/mv -f $file $dir/$basename &&\n";
-	    print "$gzip --best -f -q $dir/$basename\n";
+	    print "/bin/mv -f $file $dir/$base &&\n";
+	    print "$gzip --best -f -q $dir/$base\n";
 	    return $false;
 	}
 
 	# move file to the new directory
 	#
-	if (copy("$file", "$dir/$basename") != 1) {
-	    &warn_msg(39, "failed to cp $file $dir/$basename: $!\n");
+	if (copy("$file", "$dir/$base") != 1) {
+	    &warn_msg(45, "failed to cp $file $dir/$base: $!\n");
 	    return $false;
 	}
-	print "DEBUG: cp $file $dir/$basename\n" if $verbose;
+	print "DEBUG: cp $file $dir/$base\n" if $verbose;
 	&rm("$file", "already moved file to $dir");
 	print "DEBUG: rm -f $file\n" if $verbose;
 
 	# gzip the file in dir
 	#
-	if (system("$gzip", "--best", "-f", "-q", "$dir/$basename") != 0) {
-	    &warn_msg(40, "$gzip --best -f -q $dir/$basename failed: $!");
+	if (system("$gzip", "--best", "-f", "-q", "$dir/$base") != 0) {
+	    &warn_msg(46, "$gzip --best -f -q $dir/$base failed: $!");
 	    return $false;
 	}
-	print "DEBUG: $gzip --best -f -q $dir/$basename\n" if $verbose;
+	print "DEBUG: $gzip --best -f -q $dir/$base\n" if $verbose;
+    }
+    return $true;
+}
+
+
+# hardlink - ensure that a file is hardlinked to another
+#
+# usage:
+#	&hardlink($from, $to)
+#
+#	$from		hardlink this file
+#	$to		ensure that $to is a hardlink to $from
+#
+# returns:
+#	0 ==> archive was unsuccessful
+#	1 ==> archive was successful or ignored
+#
+sub hardlink($$)
+{
+    my ($from, $to) = @_;	# get args
+    my ($f_dev, $f_inum, $f_links);	# $from stat information
+    my ($t_dev, $t_inum, $t_links);	# $to stat information
+
+    # the from file must exist
+    #
+    ($f_dev, $f_inum, undef, $f_links) = stat($from);
+    if (! -f $from ||
+        !defined $f_dev || !defined $f_inum || !defined $f_links) {
+	&warn_msg(47, "hardlink: cannot stat or no such file: $from");
+	return $false;
+    }
+
+    # If the $to file does exist, see if it is a hardlink to $from.
+    # We can ignore this if $from does not have enough links.
+    #
+print "DEBUG: from stat: $f_dev, $f_inum, $f_links\n";
+    if ($f_links > 1 && -f $to) {
+        ($t_dev, $t_inum, undef, $t_links) = stat($to);
+print "DEBUG: to stat: $t_dev, $t_inum, $t_links\n";
+	if (defined $t_dev && $f_dev == $t_dev &&
+	    defined $t_inum && $f_inum == $t_inum &&
+	    defined $t_links && $f_links == $t_links) {
+	    print "DEBUG: $from already hardlinked onto $to\n" if $verbose;
+	    return $true;
+	}
+    }
+
+    # force $to to be a hardlink of $from
+    #
+    if (! defined $opt_n) {
+
+	# untaint the name of $from and $to
+	#
+	if ($from =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	    $from = $1;
+	} else {
+	    &warn_msg(48, "hardlink `from' file has dangerious chars: $from");
+	    return $false;
+	}
+	if ($to =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	    $to = $1;
+	} else {
+	    &warn_msg(49, "hardlink `to' file has dangerious chars: $to");
+	    return $false;
+	}
+
+	# hardlink $from onto $to
+	#
+	unlink $to if -f $to;
+	print "DEBUG: removed $to prior to hard linking\n" if $verbose;
+	if (link($from, $to) <= 0) {
+	    &warn_msg(50, "failed to hardlink $from onto $to");
+	    return $false;
+	}
+	print "DEBUG: hardlinked $from onto $to\n" if $verbose;
+
+    } else {
+	print "ln -f $from $to\n";
     }
     return $true;
 }
@@ -1707,12 +1783,19 @@ sub archive($$$$)
 {
     my ($file, $dir, $gz_dir) = @_;	# get args
     my @list;		# list of archived files
-    my @single;		# files of the form file\.\d{10}
-    my @gz;		# files of the form file\.\d{10}\-\d{10}\.gz
-    my @plain;		# files of the form file\.\d{10}\-\d{10}
+    my @single;		# files of the form file\.\d{9,10}
+    my @gz;		# files of the form file\.\d{9,10}\-\d{9,10}\.gz
+    my @plain;		# files of the form file\.\d{9,10}\-\d{9,10}
     my @double;		# @gz and @plain files
-    my @indx;		# files of the form file\.\d{10}\-\d{10}\.indx
+    my @indx;		# files of the form file\.\d{9,10}\-\d{9,10}\.indx
+    my $base;		# basename of file
+    my $now;		# seconds since the epoch of now
     my $i;
+
+    # prep work
+    #
+    $base = basename($file);
+    $now = time();
 
     # step 0 - Determine if /a/path/file exists
     #
@@ -1758,7 +1841,7 @@ sub archive($$$$)
 
     # step 2 - Remove all but the newest cycle-1 files if not blocked
     #
-    &scan_dir($file, "$dir/$oldname", "$dir/$oldname/archive", \@list);
+    &scan_dir($file, $base, "$dir/$oldname", "$dir/$oldname/archive", \@list);
     &clean_list(\@list);
     &split_list(\@list, \@single, \@gz, \@plain, \@double, \@indx);
     if ($cycle > 0 && $#double ge $cycle-1) {
@@ -1797,14 +1880,31 @@ sub archive($$$$)
 	@double = sort @double;
     }
 
+    # step 5 - force file to be hardlinked to file.tstamp
+    #
+    if (scalar(@single) < 1) {
+	print "DEBUG: no file.tstamp file, forming for $base\n" if $verbose;
+	if (! &hardlink($file, "$dir/$oldname/$base.$now")) {
+	    &warn_msg(102, "failed to hardlink $file onto %s",
+	    	      "$dir/$oldname/$base.$now");
+	    return $false;
+	}
+	push(@single, "$dir/$oldname/$base.$now");
+    } else {
+	if (! &hardlink($file, $single[0])) {
+	    &warn_msg(103, "failed to hardlink $file onto $single[0]");
+	    return $false;
+	}
+    }
+
     # XXX - misc debug stuff
     #
-    # print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
-    # print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
-    # print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
-    # print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
-    # print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
-    # print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
+    print "\nDEBUG: all list:\nDEBUG: ", join("\nDEBUG: " , @list), "\n";
+    print "\nDEBUG: single list:\nDEBUG: ", join("\nDEBUG: ", @single), "\n";
+    print "\nDEBUG: gz list:\nDEBUG: ", join("\nDEBUG: ", @gz), "\n";
+    print "\nDEBUG: plain list:\nDEBUG: ", join("\nDEBUG: ", @plain), "\n";
+    print "\nDEBUG: double list:\nDEBUG: ", join("\nDEBUG: ", @double), "\n";
+    print "\nDEBUG: index list:\nDEBUG: ", join("\nDEBUG: ", @indx), "\n";
 
     # all done
     #
