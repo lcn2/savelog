@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.3 $
-# @(#) $Id: savelog,v 2.3 2000/02/06 03:27:37 chongo Exp root $
+# @(#) $Revision: 2.4 $
+# @(#) $Id: savelog,v 2.4 2000/02/22 08:43:28 root Exp root $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -629,7 +629,7 @@ sub err_msg($$@)
     # issue message
     #
     print STDERR "$0: ERROR($code): ";
-    if (defined @args) {
+    if (@args) {
     	printf STDERR $fmt, @args;
     } else {
     	print STDERR $fmt;
@@ -663,7 +663,7 @@ sub warn_msg($$@)
     # issue message
     #
     print STDERR "$0: Warn($code): ";
-    if (defined @args) {
+    if (@args) {
     	printf STDERR $fmt, @args;
     } else {
     	print STDERR $fmt;
