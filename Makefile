@@ -2,9 +2,9 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision$
-# @(#) $Id$
-# @(#) $Source$
+# @(#) $Revision: 1.2 $
+# @(#) $Id: Makefile,v 1.2 2000/02/05 09:22:49 chongo Exp chongo $
+# @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -58,7 +58,7 @@ install: all
 	    echo "	chmod 0755 ${DESTLIB}"; \
 	    chmod 0755 ${DESTLIB}; \
 	fi
-	${INSTALL} -m 0755 ${INDX_PROB} ${DESTDIR}
+	${INSTALL} -m 0755 ${INDX_PROG} ${DESTDIR}
 
 clean:
 
