@@ -2,8 +2,8 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.6 $
-# @(#) $Id: Makefile,v 1.6 2000/06/13 20:36:08 chongo Exp chongo $
+# @(#) $Revision: 1.7 $
+# @(#) $Id: Makefile,v 1.7 2000/06/13 20:54:51 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -63,8 +63,8 @@ install: all
 	-@if [ -d "${WWWDIR}" ]; then \
 	    echo "${INSTALL} -m 0444 savelog ${WWWDIR}"; \
 	    ${INSTALL} -m 0444 savelog ${WWWDIR}; \
-	    echo "${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}"; \
-	    ${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}; \
+	    echo "${INSTALL} -m 0444 ${INDX_PROG} ${WWWDIR}"; \
+	    ${INSTALL} -m 0444 ${INDX_PROG} ${WWWDIR}; \
 	    echo "${INSTALL} -m 0444 Makefile ${WWWDIR}"; \
 	    ${INSTALL} -m 0444 Makefile ${WWWDIR}; \
 	    (echo "cd ${WWWDIR}/.."; \
