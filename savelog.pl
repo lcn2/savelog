@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.25 $
-# @(#) $Id: savelog.pl,v 1.25 2000/01/31 10:44:55 chongo Exp chongo $
+# @(#) $Revision: 1.26 $
+# @(#) $Id: savelog.pl,v 1.26 2000/01/31 10:50:48 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -144,31 +144,45 @@
 #
 #	/a/path/OLD/file.948346647-948433048.indx
 #
-# An index file consists of lines with two fields:
+# An index file consists lines with 3 fields separated by a single tab:
 #
-#	byte offset 		name of the index
+#	offset_start <tab> offset_len <tab> element name <newline>
 #
-# followed by a single byte offset indicating the length of the file.
+#	offset_start	octet file offset for start of element
+#	offset_len	length of element in octets
+#	element name	name of this element
 #
 # For example:
 #
-#	0	the 1st item
-#	1345	the 2nd item
-#	2755	the 3rd item
-#	4105
+#	0	1345	the 1st item
+#	1345	1410	the 2nd item
+#	2755	1350	the 3rd item
 #
-# In the above example, bytes 1345 to 2774 refer to a block of text
-# called 'the 2nd item'.
+# The element name follows the 2nd tab.  It may contain tabs and spaces.
+# The element name is terminated by a newline.  An element name may be
+# empty; i.e., a newline may immediately follow the 2nd tab.
+#
+# There may be gaps between elements.  It is not required that the
+# entire file consist of element.  For example, a /var/log/messages
+# file may only have elements for important blocks of lines.
+#
+# The index file is sorted by offset_start and then offset_len and 
+# then by element name.
+#
+# The offset_len may be 0.  The offset_len must be >= 0.  The offset_start
+# must be >= 0.
+#
+# Elements may overlap other elements.  If an element runs off the
+# end of the file, the extra area is assumed to be NUL byte filled.
 #
 # What constitutes a block of text depends on the 'type' given with the
 # flag.  For example, '-i mail' will search for starts of mail messages
 # and tag them with the subject line or (no subject).  For example:
 #
-#	0	A mail message subject line
-#	3507	Another subject line
-#	6628	(no subject)
-#	9345	A mail message subject line
-#	10125
+#	0	3507	A mail message subject line
+#	3507	3121	Another subject line
+#	6628	2717	(no subject)
+#	9345	930	A mail message subject line
 #
 # By default, savelog uses the program found under /usr/local/lib/savelog
 # that as the same name as type.  The '-I typedir' can change the location
@@ -180,7 +194,7 @@
 #
 #	/some/test/dir/ipchain
 #
-# If this file does not exist or is not executable, savelog will not
+# If this program does not exist or is not executable, savelog will not
 # process the file.
 #
 ###
