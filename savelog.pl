@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 2.2 $
-# @(#) $Id: savelog,v 2.2 2000/02/06 01:24:32 chongo Exp chongo $
+# @(#) $Revision: 2.3 $
+# @(#) $Id: savelog,v 2.3 2000/02/06 03:27:37 chongo Exp root $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -47,7 +47,7 @@
 #	-1	   - gzip the new 1st cycle now (def: wait 1 cycle)
 #	-z	   - force the processing of empty files (def: don't)
 #	-T	   - do not create if missing
-#	-l	   - do not gziped any new files (def: gzip after 1st cycle)
+#	-l	   - do not gzip any new files (def: gzip after 1st cycle)
 #	-v	   - enable verbose / debug mode
 #	-i type	   - form index files of a given type (def: don't)
 #	-I typedir - type file prog dir (def: /usr/local/lib/savelog)
@@ -56,7 +56,7 @@
 #
 # 	savelog [... same flags as above ...] -R dir ...
 #
-#	-R	   - args are dits under which most files are archived
+#	-R	   - args are dirs under which most files are archived
 #
 # FYI:
 #	-t	   - (option is ignored, backward compat with Smail savelog)
