@@ -2,8 +2,8 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.3 $
-# @(#) $Id: Makefile,v 1.3 2000/02/05 09:23:54 chongo Exp chongo $
+# @(#) $Revision: 1.4 $
+# @(#) $Id: Makefile,v 1.4 2000/02/05 09:24:28 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -36,6 +36,7 @@ SHELL=/bin/sh
 DESTDIR=/usr/local/etc
 LIBDIR=/usr/local/lib
 DESTLIB=${LIBDIR}/savelog
+WEBDIR=/web/isthe/chroot/html/chongo/src/savelog
 INSTALL= install
 
 INDX_PROG= mail
@@ -47,18 +48,26 @@ all: ${TARGETS}
 install: all
 	${INSTALL} -m 0755 savelog ${DESTDIR}
 	-@if [ ! -d "${LIBDIR}" ]; then \
-	    echo "	mkdir -p ${LIBDIR}"; \
+	    echo "mkdir -p ${LIBDIR}"; \
 	    mkdir -p ${LIBDIR}; \
-	    echo "	chmod 0755 ${LIBDIR}"; \
+	    echo "chmod 0755 ${LIBDIR}"; \
 	    chmod 0755 ${LIBDIR}; \
 	fi
 	-@if [ ! -d "${DESTLIB}" ]; then \
-	    echo "	mkdir -p ${DESTLIB}"; \
+	    echo "mkdir -p ${DESTLIB}"; \
 	    mkdir -p ${DESTLIB}; \
-	    echo "	chmod 0755 ${DESTLIB}"; \
+	    echo "chmod 0755 ${DESTLIB}"; \
 	    chmod 0755 ${DESTLIB}; \
 	fi
 	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
+	-@if [ -d "${WEBDIR}" ]; then \
+	    echo "${INSTALL} -m 0444 savelog ${DESTDIR}"; \
+	    ${INSTALL} -m 0444 savelog ${DESTDIR}; \
+	    echo "${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}"; \
+	    ${INSTALL} -m 0444 ${INDX_PROG} ${DESTLIB}; \
+	    echo "${INSTALL} -m 0444 Makefile ${DESTDIR}"; \
+	    ${INSTALL} -m 0444 Makefile ${DESTDIR}; \
+	fi
 
 clean:
 
