@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.8 $
-# @(#) $Id: savelog.pl,v 1.8 2000/01/24 09:11:06 chongo Exp chongo $
+# @(#) $Revision: 1.9 $
+# @(#) $Id: savelog.pl,v 1.9 2000/01/24 09:27:15 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -33,7 +33,7 @@
 ###
 #
 # usage: savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
-#		 [-n] [-z] [-T] [-l] [-v]
+#		 [-n] [-1] [-z] [-T] [-l] [-v]
 #		 [-i type [-I typedir]] [-a OLD] [-A archive] file ...
 #
 #	-m mode	   - chmod current files to mode (def: 0644)
@@ -41,7 +41,8 @@
 #	-o owner   - chown files to user (def: do not chown)
 #	-g group   - chgrp files to group (def: do not chgrp)
 #	-c count   - cycles of the file to keep, 0=>unlimited (def: 7)
-#	-n	   - gzip the most recent cycle now (def: wait 1 cycle)
+#	-n	   - do not do anything, just print cmds (def: do something)
+#	-1	   - gzip the new 1st cycle now (def: wait 1 cycle)
 #	-z	   - force the processing of empty files (def: don't)
 #	-T	   - do not create if missing
 #	-l	   - do not gziped any new files (def: gzip after 1st cycle)
@@ -106,7 +107,7 @@
 #
 #	/a/path/OLD/file.948209998-948296401
 #
-#	[[ NOTE: If '-n' is given, then this file is immediately gziped
+#	[[ NOTE: If '-1' is given, then this file is immediately gziped
 #	   when it is formed instead of waiting a cycle. ]]
 #
 # Any previously archived files (files of the form name.timestamp-timestamp)
@@ -336,6 +337,10 @@
 #   NOTE: As this point we will carry on as of -I /some/dir was not given.
 #	  If it was, replace /usr/local/lib/savelog with '/some/dir' below.
 #
+#   NOTE: If -n was given, we will not perform any actions, just go thru
+#	  the motions and print shell commands that perform the equivalent
+#	  of what would happen.
+#
 # The order of processing of /a/path/file is as follows:
 #
 #	0) Determine if /a/path/file exists.  Touch it (while setting the
@@ -352,8 +357,9 @@
 #
 #	2) Remove all but the newest count-1 cycles and, if they exist
 #	   unless count is 0.  Remove any index file that is not associated
-#	   with a (non-removed) file.  Files are removed from under /a/path/OLD
-#	   or from under /a/path/OLD/archive if archive exists.
+#	   with a (non-removed) file.  If both foo and foo.gz are found,
+#	   the foo file will be removed.  Files are removed from under
+#	   /a/path/OLD or from under /a/path/OLD/archive if archive exists.
 #
 #	   Assertion: At this point only count-1 cycles exist, or '-c 0'
 #		      was given and no files were removed.
@@ -418,11 +424,11 @@
 #	   Assertion: The file /a/path/OLD/file.tstamp-now.indx exists and
 #		      -i was given.
 #
-#      12) If -n was given, the gzip /a/path/OLD/file.tstamp-now.  Place the
+#      12) If -1 was given, the gzip /a/path/OLD/file.tstamp-now.  Place the
 #	   result under /a/path/OLD or /a/path/OLD/archive if -A was given.
-#	   If -n was not given, then we will ship this step.
+#	   If -1 was not given, then we will ship this step.
 #
-#	   Assertion: The file /a/path/OLD/file.tstamp-now.gz exists and -n
+#	   Assertion: The file /a/path/OLD/file.tstamp-now.gz exists and -1
 #		      was given.
 #
 ###
@@ -431,8 +437,8 @@
 #
 use strict;
 use English;
-use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c $opt_n
-	    $opt_n $opt_z $opt_T $opt_l $opt_v
+use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
+	    $opt_n $opt_1 $opt_z $opt_T $opt_l $opt_v
 	    $opt_i $opt_I $opt_a $opt_A);
 use Getopt::Std;
 $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
@@ -468,7 +474,7 @@ my $false = 0;		# genuine falseness
 #
 $usage = "usage:\n" .
 	 "$0 [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]\n" .
-	 "\t[-n] [-z] [-T] [-l] [-v]\n" .
+	 "\t[-n] [-1] [-z] [-T] [-l] [-v]\n" .
 	 "\t[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...\n" .
 	 "\t\n" .
 	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
@@ -477,6 +483,8 @@ $usage = "usage:\n" .
 	 "\t-g group\t chgrp files to group (def: do not chgrp)\n" .
 	 "\t-c count\t cycles of the file to keep, 0=>unlimited (def: 7)\n" .
 	 "\t-n\t gzip the most recent cycle now (def: wait 1 cycle)\n" .
+	 "\t-n\t do not do anything, just print cmds (def: do something)\n" .
+	 "\t-1\t gzip the new 1st cycle now (def: wait 1 cycle)\n" .
 	 "\t-z\t force the processing of empty files (def: don't)\n" .
 	 "\t-T\t do not create if missing\n" .
 	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
@@ -496,6 +504,23 @@ MAIN:
     my $dir;		# preped directory in which $filename resides
     my $file;		# basename of $filename
     my $gz_dir;		# where .gz files are to be placed
+
+$opt_n = 1;	# XXX - DEBUG
+
+# XXX - debug
+#
+# my (@list, @single, @gz, @plain, @double, @index);
+# &scandir("foo", "OLD", "OLD/archive", \@list);
+# print "scanned list\n", join("\n", @list), "\n";
+# &cleanlist(\@list);
+# print "\ncleaned list:\n", join("\n", @list), "\n";
+# &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index);
+# print "\nsingle list:\n", join("\n", @single), "\n";
+# print "\ngz list:\n", join("\n", @gz), "\n";
+# print "\nplain list:\n", join("\n", @plain), "\n";
+# print "\ndouble list:\n", join("\n", @double), "\n";
+# print "\nindex list:\n", join("\n", @index), "\n";
+# exit(0);
 
     # setup
     #
@@ -633,7 +658,7 @@ sub parse()
 
     # parse args
     #
-    if (!getopts('m:M:o:g:c:nzTlvi:I:a:A:') || !defined($ARGV[0])) {
+    if (!getopts('m:M:o:g:c:n1zTlvi:I:a:A:') || !defined($ARGV[0])) {
     	die $usage;
 	exit 1;
     }
@@ -677,11 +702,11 @@ sub parse()
 		$file_uid = getpwnam($opt_o);
 	    }
 	    if (!defined $file_uid) {
-		&error(4, "bad user: $opt_o");
+		&error(4, "parse: bad user: $opt_o");
 	    }
 	    print "DEBUG: set file uid: $file_uid\n" if $verbose;
         } else {
-	    &error(5, "only the superuser can use -o");
+	    &error(5, "parse: only the superuser can use -o");
 	}
     }
 
@@ -694,11 +719,11 @@ sub parse()
 		$file_gid = getgrnam($opt_g);
 	    }
 	    if (!defined $file_gid) {
-		&error(6, "bad group: $opt_g");
+		&error(6, "parse: bad group: $opt_g");
 	    }
 	    print "DEBUG: set file gid: $file_gid\n" if $verbose;
         } else {
-	    &error(7, "only the superuser can use -g");
+	    &error(7, "parse: only the superuser can use -g");
 	}
     }
 
@@ -706,7 +731,7 @@ sub parse()
     #
     $cycle = $opt_c if defined $opt_c;
     if ($cycle < 0) {
-	&error(8, "cycles to keep: $cycle must be >= 0");
+	&error(8, "parse: cycles to keep: $cycle must be >= 0");
     }
 
     # -i indx_type
@@ -714,10 +739,10 @@ sub parse()
     if (defined $opt_i) {
 	$indx_type = $opt_i;
 	if ($indx_type =~ m:[/~*?[]:) {
-	    &error(9, "index type may not contain /, ~, *, ?, or [");
+	    &error(9, "parse: index type may not contain /, ~, *, ?, or [");
 	}
 	if ($indx_type eq "." || $indx_type eq "..") {
-	    &error(10, "index type type may not be . or ..");
+	    &error(10, "parse: index type type may not be . or ..");
 	}
 	print "DEBUG: index type: $indx_type\n" if $verbose;
     }
@@ -726,17 +751,18 @@ sub parse()
     #
     if (defined $opt_I) {
 	if (!defined $opt_i) {
-	    &error(11, "use of -I typedir requires -i indx_type");
+	    &error(11, "parse: use of -I typedir requires -i indx_type");
 	}
 	if (! -d $opt_I) {
-	    &error(12, "no such index type directory: $opt_I");
+	    &error(12, "parse: no such index type directory: $opt_I");
 	}
 	$indx_dir = $opt_I;
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
     	if (! -x "$indx_dir/$indx_type") {
-	    &error(13, "index type prog: $indx_type not found in: $indx_dir");
+	    &error(13,
+	    	"parse: index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
 	print "DEBUG: indexing prog: $indx_prog\n" if $verbose;
@@ -746,10 +772,10 @@ sub parse()
     #
     $oldname = $opt_a if defined $opt_a;
     if ($oldname =~ m:[/~*?[]:) {
-	&error(14, "OLD dir name may not contain /, ~, *, ?, or [");
+	&error(14, "parse: OLD dir name may not contain /, ~, *, ?, or [");
     }
     if ($oldname eq "." || $oldname eq "..") {
-	&error(15, "OLD dir name may not be . or ..");
+	&error(15, "parse: OLD dir name may not be . or ..");
     }
     if ($oldname ne "OLD" && $verbose) {
 	print "DEBUG: using non-default OLD name: $oldname\n" if $verbose;
@@ -803,6 +829,7 @@ sub prepfile($\$\$\$)
 	return $false;
     }
     print "DEBUG: starting to process: $filename\n" if $verbose;
+    print "\n# starting to process: $filename\n" if defined $opt_n;
 
     # determine, untaint and cd to the file's directory
     #
@@ -824,6 +851,7 @@ sub prepfile($\$\$\$)
     	&warning(18, "cannot cd to $dir");
 	return $false;
     }
+    print "cd $dir\n" if defined $opt_n;
     print "DEBUG: working directory: $dir\n" if $verbose;
 
     # make sure that the OLD directory exists
@@ -847,13 +875,15 @@ sub prepfile($\$\$\$)
 	if ($archive_dir =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
 	    $archive_dir = $1;
 	} else {
-	    &error(20, "archive dir has dangerious chars: $archive_dir");
+	    &error(20,
+	    	"prepfile: archive dir has dangerious chars: $archive_dir");
 	}
 
 	# The archive directory must exist
 	#
 	if (! -d $archive_dir) {
-	    &error(21, "archive dir: $archive_dir is not a directory");
+	    &error(21,
+	    	"prepfile: archive dir: $archive_dir is not a directory");
 
 	# If we have an OLD/archive is a symlink, make it point to archive_dir
 	#
@@ -864,7 +894,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(22, "cannot stat archive dir: $archive_dir");
+	    	&error(22, "prepfile: cannot stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -878,7 +908,7 @@ sub prepfile($\$\$\$)
 			     "cannot symlink $oldname/archive to $archive_dir");
 		    return $false;
 		}
-		printf("DEBUG: symlink %s to %s\n", 
+		printf("DEBUG: symlink %s to %s\n",
 		       "$oldname/archive", $archive_dir) if $verbose;
 	    }
 
@@ -889,7 +919,7 @@ sub prepfile($\$\$\$)
 	    ($dev1, $inum1, undef) = stat("$oldname/archive");
 	    ($dev2, $inum2, undef) = stat($archive_dir);
 	    if (!defined($dev2) || !defined($inum2)) {
-	    	&error(24, "can't stat archive dir: $archive_dir");
+	    	&error(24, "prepfile: can't stat archive dir: $archive_dir");
 	    }
 	    if (!defined($dev1) || !defined($inum1) ||
 	    	$dev1 != $dev2 || $inum1 != $inum2) {
@@ -908,7 +938,7 @@ sub prepfile($\$\$\$)
 		&warning(26, "cannot symlink $oldname/archive to $archive_dir");
 		return $false;
 	    }
-	    printf("DEBUG: symlinked %s to %s\n", 
+	    printf("DEBUG: symlinked %s to %s\n",
 		   "$oldname/archive", $archive_dir) if $verbose;
 	}
 	$gz_dir = "$dir/$oldname/archive";
@@ -1097,6 +1127,286 @@ sub safe_file_create($$$$$)
 }
 
 
+# scandir - scan the OLD and possibly archive dir for archived filenames
+#
+# usage:
+#	&scandir($filename, $olddir, $archdir, \@filelist)
+#
+#	$filename	archived filename to scan for in $olddir or $archdir
+#	$olddir		OLD directory name to scan in
+#	$archdir	if defined, name of OLD/archive to scan for
+#	\@filelist	list of files found
+#
+# We will look for filenames of the form:
+#
+#	filename\.\d{10}
+#	filename\.\d{10}\-\d{10}
+#	filename\.\d{10}\-\d{10}\.gz
+#	filename\.\d{10}\-\d{10}\.indx
+#
+# directly under:
+#
+#	OLD
+#	OLD/archive	(if archive exists)
+#
+# returns:
+#	0 ==> scan was unsuccessful
+#	1 ==> scan was successful or ignored
+#
+# NOTE: We will return the list sorted by timestamp
+#
+sub scandir($$$\@)
+{
+    my ($filename, $olddir, $archdir, $list) = @_;	# get args
+    my @found;		# list of matching files found
+    my $i;
+
+    # verify that the list arg is an array reference
+    #
+    if (!defined($list) || ref($list) ne 'ARRAY') {
+	&error(31, "scandir: 4th argument is not an array reference");
+    }
+
+    # clear the list
+    #
+    $#$list = -1;
+
+    # scan OLD/ for files of the form filename\.\d{10}
+    #
+    if (! opendir DIR, $olddir) {
+	&warning(32, "unable to open OLD dir: $olddir");
+	return $false;
+    }
+    @found = grep /^$filename\.\d{10}$/, readdir DIR;
+    closedir DIR;
+
+    # append each found file as OLD/name in sorted order
+    #
+    foreach $i (sort @found) {
+	push(@$list, "$olddir/$i");
+    }
+
+    # scan OLD/archive if it exists
+    #
+    if (defined $archdir) {
+
+	# scan the OLD/archive/
+	#
+	if (! opendir DIR, $archdir) {
+	    &warning(33, "cannot open OLD/archive dir: $archdir");
+	    return $false;
+	}
+	@found = grep /^$filename\.\d{10}\-\d{10}$|^$filename\.\d{10}\-\d{10}\.gz$|^$filename\.\d{10}\-\d{10}\.indx$/, readdir DIR;
+	closedir DIR;
+
+	# append each found file as OLD/archive/name in sorted order
+	#
+	foreach $i (sort @found) {
+	    push(@$list, "$archdir/$i");
+	}
+
+    # otherwise scan OLD for filename\.\d{10}\-\d{10} and .gz and .indx files
+    #
+    } else {
+
+	# scan the OLD/ again
+	#
+	if (! opendir DIR, $olddir) {
+	    &warning(34, "can't open OLD/archive dir: $olddir");
+	    return $false;
+	}
+	@found = grep /^$filename\.\d{10}\-\d{10}$|^$filename\.\d{10}\-\d{10}\.gz$|^$filename\.\d{10}\-\d{10}\.indx$/, readdir DIR;
+	closedir DIR;
+
+	# append each found file as OLD/name in sorted order
+	#
+	foreach $i (sort @found) {
+	    push(@$list, "$olddir/$i");
+	}
+    }
+}
+
+
+# rm - remove a file (or not if -n)
+#
+# usage:
+#	&rm($filename[, $reason]);
+#
+#	$filename	the file to remove
+#	$reason		the reason to remove, if defined
+#
+sub rm($$)
+{
+    my ($filename, $reason) = @_;	# get args
+
+    # case: -n was given, only print action\
+    #
+    if (defined $opt_n) {
+	
+	# just print what we would have done
+	#
+	print "rm -f $filename\t# $reason\n";
+
+    # case: attempt to remove the file
+    #
+    } else {
+
+	# untaint $filename
+	#
+	if ($filename =~ m#^/# || $filename =~ m#^\.\.\/# ||
+	    $filename =~ m#^/\.\./"#) {
+	    &warning(35, "unsafe filename to remove: $filename");
+	    return;
+	}
+	if ($filename =~ m#^([-\@\w./+:%][-\@\w./+:%~]*)$#) {
+	    $filename = $1;
+	}
+
+	# unlink
+	#
+	if (unlink $filename) {
+	    print "DEBUG: rm $filename\n" if $verbose;
+
+	} else {
+	    &warning(36, "cannot remove $filename\n");
+	}
+    }
+}
+
+
+# cleanlist - remove duplicate foo and foo.gz files and stale .indx files
+#
+#	&cleanlist(\@list)
+#
+#	@list		list of archived files of $filename to be cleaned
+#
+sub cleanlist(\@)
+{
+    my $list = $_[0];	# get args
+    my $prev;		# previous item on list
+    my $cur;		# current item on list
+    my $i;
+
+    # verify that the list arg is an array reference
+    #
+    if (!defined($list) || ref($list) ne 'ARRAY') {
+	&error(37, "cleanlist: 2nd argument is not an array reference");
+    }
+
+    # do nothing if the list has 1 or 0 files in it
+    #
+    if ($#$list <= 0) {
+	return;
+    }
+
+    # scan thru the list looking for dups, .gz dups and stale .indx files
+    #
+    # NOTE: There is magic is how $prev and $cur are set.  We must be careful
+    #	    because splicing the array can change what is previous.
+    #
+    for ($prev = $$list[0], $cur = $$list[$i=1];
+         $i <= $#$list; 
+	 $prev = $$list[$i++], $cur = $$list[$i]) {
+
+	# firewall - catch dup and bogus sorting
+	#
+	if ($prev eq $cur) {
+	    &error(38, "cleanlist: found duplicate list item: $cur");
+	}
+
+	# catch foo and foo.gz and remove foo
+	#
+	if ("$prev.gz" eq $cur) {
+	    &rm($prev, "also found $cur");
+	    splice @$list, $i-1, 1;
+	}
+
+	# remove lone .indx files
+	#
+	if ($cur =~ /\.indx$/) {
+	    my $base;		# base of .indx name
+
+	    # catch lone .indx files
+	    #
+	    ($base = $cur) =~ s/\.indx$//;
+	    if ("$base" ne $prev && "$base.gz" ne $prev) {
+		&rm($cur, "lone .indx file");
+		splice @$list, $i, 1;
+	    }
+	}
+    }
+}
+
+
+# splitlist - split a list of files into single, double, gz and index files
+#
+# given:
+#	&splitlist(\@list, \@single, \@gz, \@plain, \@double, \@index)
+#
+#	@list		a list of archived files (from scandir, for example)
+#	@single		files of the form name\.\d{10}
+#	@gz		files of the form name\.\d{10}\-\d{10}\.gz
+#	@plain		files of the form name\.\d{10}\-\d{10}
+#	@double		both @gz and @plain files
+#	@index		files of the form name\.\d{10}\-\d{10}\.inedx
+#
+sub splitlist(\@\@\@\@\@\@)
+{
+    my ($list, $single, $gz, $plain, $double, $index) = @_;	# get args
+    my $i;
+
+    # verify that we were given references to arrays
+    #
+    if (!defined $list || !defined $single || !defined $gz ||
+        !defined $plain || !defined $double || !defined $index ||
+	ref($list) ne 'ARRAY' || ref($single) ne 'ARRAY' ||
+	ref($gz) ne 'ARRAY' || ref($plain) ne 'ARRAY' ||
+	ref($double) ne 'ARRAY' || ref($index) ne 'ARRAY') {
+	&error(39, "splitlist: arg(s) are not an array reference");
+    }
+
+    # truncate lists
+    #
+    $#$single = -1;
+    $#$gz = -1;
+    $#$plain = -1;
+    $#$double = -1;
+    $#$index = -1;
+
+    # look at each element and classify it
+    #
+    foreach $i (@$list) {
+
+	# record filename\.\d{10} files
+	#
+	if ($i =~ /\.\d{10}$/) {
+	    push(@$single, $i);
+
+	# record filename\.\d{10}\-\d{10}\.gz files (also as double files)
+	#
+	} elsif ($i =~ /\.\d{10}\-\d{10}\.gz$/) {
+	    push(@$gz, $i);
+	    push(@$double, $i);
+
+	# record filename\.\d{10}\-\d{10} files (also as double files)
+	#
+	} elsif ($i =~ /\.\d{10}\-\d{10}$/) {
+	    push(@$plain, $i);
+	    push(@$double, $i);
+
+	# record filename\.\d{10}\-\d{10}\.indx files
+	#
+	} elsif ($i =~ /\.\d{10}\-\d{10}\.indx$/) {
+	    push(@$index, $i);
+
+	# we should not get here
+	#
+	} else {
+	    &error(40, "splitlist: found bogus member of file list: $i");
+	}
+    }
+}
+
 # archive - archive a file
 #
 # usage:
@@ -1116,15 +1426,21 @@ sub safe_file_create($$$$$)
 sub archive($$$$)
 {
     my ($filename, $dir, $file, $gz_dir) = @_;	# get args
+    my @list;		# list of archived files
+    my @single;		# files of the form filename\.\d{10}
+    my @gz;		# files of the form filename\.\d{10}\-\d{10}\.gz
+    my @plain;		# files of the form filename\.\d{10}\-\d{10}
+    my @double;		# @gz and @plain files
+    my @indx;		# files of the form filename\.\d{10}\-\d{10}\.indx
 
     # step 0 - Determine if /a/path/file exists
     #
     if (! -f $file) {
-	
+
 	# -T prevents us from touching missing files
 	#
 	if (defined $opt_T) {
-	
+
 	    print "DEBUG: $filename missing and -T was given\n" if $verbose;
 	    print "DEBUG: nothing to do for $filename\n" if $verbose;
 	    return $true;
@@ -1136,8 +1452,8 @@ sub archive($$$$)
 	    # create the file
 	    #
 	    if (! &safe_file_create($file, $file_uid, $file_gid,
-	    			    $file_mode, $true)) {
-	    	&warning(31, "could not create $filename");
+	    			    $file_mode, $false)) {
+	    	&warning(41, "could not exclusively create $filename");
 		return $false;
 	    }
 	}
@@ -1145,7 +1461,7 @@ sub archive($$$$)
 	# verfiy that the file still exists
 	#
 	if (! -f $file) {
-	    &warning(32, "created $filename and now it is missing");
+	    &warning(42, "created $filename and now it is missing");
 	    return $false;
 	}
     }
@@ -1158,6 +1474,12 @@ sub archive($$$$)
 	print "DEBUG: nothing to do for $filename\n" if $verbose;
 	return $true;
     }
+
+    # step 2 - Remove all but the newest cycles if not blocked
+    #
+    &scandir($file, $oldname, "$oldname/archive", \@list);
+    &cleanlist(\@list);
+    &splitlist(\@list, \@single, \@gz, \@plain, \@double, \@indx);
 
     # all done
     #
