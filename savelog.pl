@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.31 $
-# @(#) $Id: savelog,v 1.31 2000/02/06 00:26:39 chongo Exp chongo $
+# @(#) $Revision: 2.1 $
+# @(#) $Id: savelog,v 2.1 2000/02/06 00:47:01 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -34,14 +34,15 @@
 ###
 #
 # usage: savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
-#		 [-n] [-1] [-z] [-T] [-l] [-v]
+#		 [-h] [-n] [-1] [-z] [-T] [-l] [-v]
 #		 [-i type [-I typedir]] [-a OLD] [-A archive] file ...
 #
 #	-m mode	   - chmod current files to mode (def: 0644)
 #	-M mode	   - chmod archived files to mode (def: 0444)
 #	-o owner   - chown files to user (def: do not chown)
 #	-g group   - chgrp files to group (def: do not chgrp)
-#	-c count   - cycles of the file to keep, 0=>unlimited (def: 7)
+#	-c count   - cycles of the file to keep, 0=>unlimited (def: 14)
+#	-h	   - display a usage message and exit
 #	-n	   - do not do anything, just print cmds (def: do something)
 #	-1	   - gzip the new 1st cycle now (def: wait 1 cycle)
 #	-z	   - force the processing of empty files (def: don't)
@@ -206,7 +207,7 @@
 ###
 #
 # One can control the number of cycles that savelog will archive a file
-# via the '-c count' option.  By default savelog keeps 7 cycles.
+# via the '-c count' option.  By default savelog keeps 14 cycles.
 #
 # If '-c 1' is given, then only the plaintext cycle file is kept.
 # If '-c 2' is given, the plaintext file and 1 gziped file is kept.
@@ -494,7 +495,7 @@
 use strict;
 use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
-	    $opt_n $opt_1 $opt_z $opt_T $opt_l $opt_v
+	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_l $opt_v
 	    $opt_i $opt_I $opt_a $opt_A $opt_R);
 use Getopt::Std;
 $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
@@ -535,20 +536,21 @@ my %dir_cache;		# $dir_cache{$dir} - \@list of archived files in $dir
 #
 $usage = "usage:\n" .
 	 "$0 [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]\n" .
-	 "\t[-n] [-1] [-z] [-T] [-l] [-v]\n" .
+	 "\t[-h] [-n] [-1] [-z] [-T] [-l] [-v]\n" .
 	 "\t[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...\n" .
 	 "\t\n" .
 	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
 	 "\t-M mode\t chmod archived files to mode (def: 0444)\n" .
 	 "\t-o owner chown files to user (def: do not chown)\n" .
 	 "\t-g group chgrp files to group (def: do not chgrp)\n" .
-	 "\t-c count cycles of the file to keep, 0=>unlimited (def: 7)\n" .
+	 "\t-c count cycles of the file to keep, 0=>unlimited (def: 14)\n" .
+	 "\t-h\t display this message and exit\n" .
 	 "\t-n\t do not do anything, just print cmds (def: do something)\n" .
 	 "\t-1\t gzip the new 1st cycle now (def: wait 1 cycle)\n" .
 	 "\t-z\t force the processing of empty files (def: don't)\n" .
 	 "\t-T\t do not create if missing\n" .
 	 "\t-l\t do not gziped any new files (def: gzip after 1st cycle)\n" .
-	 "\t-v\t verbose output\n" .
+	 "\t-v\t\t verbose output\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
 	 "\t-a OLD\t\t OLD directory name (not a path) (def: OLD)\n" .
@@ -838,7 +840,7 @@ sub parse()
     $archive_mode = 0444;
     $file_uid = undef;
     $file_gid = undef;
-    $cycle = 7;
+    $cycle = 14;
     $verbose = undef;
     $indx_type = undef;
     $indx_dir = "/usr/local/lib/savelog";
@@ -848,9 +850,16 @@ sub parse()
 
     # parse args
     #
-    if (!getopts('m:M:o:g:c:n1zTlvi:I:a:A:R') || !defined($ARGV[0])) {
+    if (!getopts('m:M:o:g:c:hn1zTlvi:I:a:A:R') || !defined($ARGV[0])) {
     	die $usage;
 	exit 1;
+    }
+
+    # process -h and exit
+    #
+    if (defined $opt_h) {
+	print "$usage";
+	exit 0;
     }
 
     # -v
