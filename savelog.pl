@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 3.1 $
-# @(#) $Id: savelog.pl,v 3.1 2002/10/02 03:40:07 chongo Exp chongo $
+# @(#) $Revision: 3.2 $
+# @(#) $Id: savelog.pl,v 3.2 2002/10/02 05:29:31 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
@@ -355,13 +355,7 @@
 #
 #	   Assertion: At this point the file exists or we have stopped.
 #
-#	1) Determine if /a/path/file is empty.  Do nothing else if empty
-#	   unless -z was given.
-#
-#	   Assertion: At this point the file is non-empty or -z was given
-#		      and the file is empty.
-#
-#	2) Remove all but the newest count-1 cycles and, if they exist
+#	1) Remove all but the newest count-1 cycles and, if they exist
 #	   unless count is 0.  Remove any index file that is not associated
 #	   with a (non-removed) file.  If both foo and foo.gz are found,
 #	   the foo file will be removed.  Files are removed from under
@@ -370,7 +364,7 @@
 #	   Assertion: At this point only count-1 cycles exist, or '-c 0'
 #		      was given and no files were removed.
 #
-#	3) If -L was NOT given, then gzip all files of the form
+#	2) If -L was NOT given, then gzip all files of the form
 #	   /a/path/OLD/file.tstamp1-tstamp2.  The gziped files will be
 #	   placed under /a/path/OLD/archive if '-A archive' was given,
 #	   or under /a/path/OLD if it was not.
@@ -395,6 +389,12 @@
 #		 formed.  For this run, either /a/path/OLD/file.tstamp1-tstamp2
 #		 will be gzipped under /a/path/OLD/archive (without -L
 #		 or moved under /a/path/OLD/archive (with -L).
+#
+#	3) Determine if /a/path/file is empty.  Do nothing else if empty
+#	   unless -z was given.
+#
+#	   Assertion: At this point the file is non-empty or -z was given
+#		      and the file is empty.
 #
 #	4) Hard link /a/path/file to /a/path/OLD/file.tstamp_last-now.
 #	   Here, 'tstamp_last' is the most recent tstamp2 value from
@@ -665,16 +665,16 @@ sub warn_msg($$@)
 #
 sub walk_dir($)
 {
-    my $name = $_;	# the basename found by find()
+    my $name = $_;	# the name found by find()
 
     # taint pruning and untainting
     #
-    if ($File::Find::name =~ m#^([-\@\w./+:%,][-\@\w./+:%,~]*)$#) {
+    if ($File::Find::name =~ m#^([\w./,][-\@\w./+:%,~]*)$#) {
     	$File::Find::name = $1;
     } else {
 	# disable further tree walking on a tainted name
 	#
-	print "DEBUG: walk_dir: tainted path: $File::Find::name\n"
+	print "DEBUG: walk_dir: pruning tainted path: $File::Find::name\n"
 	 	if $verbose;
 	$File::Find::prune = $true;
     	return;
@@ -688,8 +688,7 @@ sub walk_dir($)
     #
     if (-d $name &&
         ($name eq "CVS" || $name eq "RCS" || $name eq "SCCS" ||
-    	 $name eq "OLD" || $name eq "archive" || $name =~ /^\../ ||
-	 (defined $opt_a && $name eq $oldname) ||
+    	 $name eq $oldname || $name =~ /^\../ ||
 	 ! -r $name || ! -w $name || ! -x $name)) {
 
 	# disable further tree walking
@@ -736,6 +735,7 @@ sub walk_dir($)
 
     # save the full path of this file for processing
     #
+    print "DEBUG: will process $File::Find::name\n" if $verbose;
     push(@walk_files, $File::Find::name);
     return;
 }
@@ -868,7 +868,7 @@ sub parse()
 	printf "DEBUG: non-default archive dir mode: 0%03o\n", $archdir_mode
 		if $verbose;
     } else {
-    	$archdir_mode = 0755;
+    	$archdir_mode = 02755;
     }
 
     # -o owner
@@ -1031,7 +1031,7 @@ sub prep_file($)
     # determine the file's directory
     #
     $dir = dirname($file);
-    print "DEBUG: $file dir is: $dir\n" if $verbose;
+    print "DEBUG: prep $file  dir is: $dir\n" if $verbose;
 
     # untaint the file
     #
@@ -1380,7 +1380,7 @@ sub load_dir($)
 #	$file		archived file to scan for in $olddir or $archdir
 #	$base		basename of $file
 #	$olddir		OLD directory name to scan in
-#	$archdir	if defined, name of OLD/archive to scan for
+#	$archdir	name of OLD/archive to scan for or just $olddir
 #
 # We will look for files of the form:
 #
@@ -1400,55 +1400,46 @@ sub load_dir($)
 #    @{$list}
 #	list of files found
 #
-# NOTE: We will return the list sorted by timestamp
+# NOTE: We will return the list sorted by timestamp.
+#
+# NOTE: The moves, copies, and gzips that are performed by archive() are
+#	specific to a particular file.
 #
 sub scan_dir($$$$)
 {
     my ($file, $base, $olddir, $archdir) = @_;	# get args
-    my $filelist;		# @{$array} of files found under $dir
-    my $filelist2;		# @{$array} of more files found under $dir
+    my $filelist;		# @{$array} of files found in a directory
     my @list;			# list of files to return
     my $status;			# subroutine return status
 
-    # scan OLD/ for files of the form base\.\d{9,10} or base\.\d{9,10}\-\d{9,10}
+    # scan OLD/ for files of the form base\.\d{9,10}\-\d{9,10}
     #
     print "DEBUG: scanning $olddir for $base files\n" if $verbose;
-    if (! (($status, $filelist) = load_dir($olddir)) ) {
+    ($status, $filelist) = load_dir($olddir);
+    if (! $status) {
 	warn_msg(33, "unable to open OLD dir: $olddir");
 	return ($false, undef);
     }
-    @list = grep m#/$base\.\d{9,10}\-\d{9,10}$#, @{$filelist};
+    @list = grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist};
 
-    # scan OLD/archive if it exists
+    # scan OLD/archive if it exists and is not OLD
     #
-    if (defined $archdir && -d $archdir) {
+    if (defined $archdir && $archdir ne $olddir && -d $archdir) {
 
-	# scan the OLD/archive/
+	# scan the OLD/archive
 	#
-	print "DEBUG: scanning $archdir for $base files\n" if $verbose;
-	if (! (($status, $filelist2) = load_dir($archdir)) ) {
+	print "DEBUG: also scanning $archdir for $base files\n" if $verbose;
+	($status, $filelist) = load_dir($archdir);
+	if (! $status) {
 	    warn_msg(34, "cannot open OLD/archive dir: $archdir");
 	    return ($false, undef);
 	}
-	push(@list, grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist2});
-
-    # otherwise scan OLD for base\.\d{9,10}\-\d{9,10} and .gz and .indx files
-    #
-    } else {
-
-	# scan the OLD/ again
-	#
-	print "DEBUG: scanning $olddir for more $base files\n" if $verbose;
-	if (! (($status, $filelist2) = load_dir($olddir)) ) {
-	    warn_msg(35, "can't open OLD/archive dir: $olddir");
-	    return ($false, undef);
-	}
-	push(@list, grep m#/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist2});
+	push(@list, grep m#/$base\.\d{9,10}\-\d{9,10}$|/$base\.\d{9,10}\-\d{9,10}\.gz$|/$base\.\d{9,10}\-\d{9,10}\.indx$#, @{$filelist});
     }
-    @list = sort tstamp_cmp @list;
 
     # return information
     #
+    @list = sort tstamp_cmp @list;
     return ($true, \@list);
 }
 
@@ -1837,6 +1828,7 @@ sub gzip_or_move($$$$)
 	    warn_msg(45, "failed to mv $file $target/$base: $!\n");
 	    return $false;
 	}
+	print "DEBUG: mv -f $file $target/$base\n" if $verbose;
 
 	# gzip the file in dir
 	#
@@ -1872,6 +1864,7 @@ sub gzip_or_move($$$$)
 	    warn_msg(48, "failed to mv $file $target/$base: $!\n");
 	    return $false;
 	}
+	print "DEBUG: mv -f $file $target/$base\n" if $verbose;
 
 	# chmod the moved file
 	#
@@ -2027,24 +2020,16 @@ sub archive($$$)
 	}
     }
 
-    # step 1 - Determine if /a/path/file is empty
+    # step 1 - Remove all but the newest cycle-1 files if not blocked
     #
-    if (-z $file && ! defined $opt_z) {
-
-	print "DEBUG: $file is empty and -z was not given\n" if $verbose;
-	print "DEBUG: nothing to do for $file\n" if $verbose;
-	return $true;
-    }
-
-    # step 2 - Remove all but the newest cycle-1 files if not blocked
-    #
-    if (! (($status, $list) = scan_dir($file, $base, "$dir/$oldname",
-					 "$dir/$oldname/archive")) ) {
+    ($status, $list) = scan_dir($file, $base, "$dir/$oldname", $gz_dir);
+    if (! $status) {
 	warn_msg(54, "failed to scan $dir/$oldname\n");
 	return $false;
     }
     clean_list($list);
-    if (! (($status,$gz,$plain,$double,$indx) = split_list($list)) ) {
+    ($status,$gz,$plain,$double,$indx) = split_list($list);
+    if (! $status) {
 	warn_msg(55, "splitlist failed on $file\'s dirs\n");
 	return $false;
     }
@@ -2052,7 +2037,7 @@ sub archive($$$)
 	rm_cycles($plain, $double);
     }
 
-    # step 3 - gzip or move (of -L) all file.tstamp1-tstamp2 files
+    # step 2 - gzip or move (of -L) all file.tstamp1-tstamp2 files
     #
     if (scalar(@{$plain}) > 0) {
 
@@ -2069,7 +2054,8 @@ sub archive($$$)
 
 	    # gzip or move files in place
 	    #
-	    if (! defined $archive_name || $$plain[$i] =~ m#/archive/[^/]+$#) {
+	    if (! defined $archive_name ||
+	    	$$plain[$i] =~ m#/$archive_name/[^/]+$#o) {
 
 		# gzip the file in place
 		gzip_or_move($$plain[$i], $need_gzip, $true, $gz_dir);
@@ -2085,6 +2071,42 @@ sub archive($$$)
 		gzip_or_move($$plain[$i], $need_gzip, $false, $gz_dir);
 	    }
 	}
+    }
+    # If we have "-A archive" and files directly under OLD, move
+    # then older OLD/archive.
+    #
+    if (defined $archive_name && scalar(@{$gz}) > 0) {
+	for ($i = 0; $i <= $#$gz; ++$i) {
+
+	    # ignore files already under OLD/archive
+	    #
+	    next if ($$gz[$i] =~ m#/$archive_name/[^/]+$#o);
+
+	    # move file under archive
+	    #
+	    gzip_or_move($$gz[$i], $false, $false, $gz_dir);
+	}
+    }
+    if (defined $archive_name && scalar(@{$indx}) > 0) {
+	for ($i = 0; $i <= $#$indx; ++$i) {
+
+	    # ignore .indx files already under OLD/archive
+	    #
+	    next if ($$indx[$i] =~ m#/$archive_name/[^/]+$#o);
+
+	    # move the .indx file under archive
+	    #
+	    gzip_or_move($$indx[$i], $false, $false, $gz_dir);
+	}
+    }
+
+    # step 3 - Determine if /a/path/file is empty
+    #
+    if (-z $file && ! defined $opt_z) {
+
+	print "DEBUG: $file is empty and -z was not given\n" if $verbose;
+	print "DEBUG: nothing to do for $file\n" if $verbose;
+	return $true;
     }
 
     # step 4 - Hard link /a/path/file to /a/path/OLD/file.tstamp_last-now
