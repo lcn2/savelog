@@ -3,8 +3,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.30 $
-# @(#) $Id: savelog,v 1.30 2000/02/05 21:39:58 chongo Exp chongo $
+# @(#) $Revision: 1.31 $
+# @(#) $Id: savelog,v 1.31 2000/02/06 00:26:39 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
