@@ -2,8 +2,8 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 1.24 $
-# @(#) $Id: savelog.pl,v 1.24 2000/01/31 10:19:03 chongo Exp chongo $
+# @(#) $Revision: 1.25 $
+# @(#) $Id: savelog.pl,v 1.25 2000/01/31 10:44:55 chongo Exp chongo $
 # @(#) $Source: /usr/local/src/etc/savelog/RCS/savelog.pl,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
@@ -1830,6 +1830,25 @@ sub hard_link($$)
 }
 
 
+# form_indx - form an .indx file of a file
+#
+# usage:
+#	&form_indx($file)
+#
+#	$file	a file to form an index for
+#
+# We will form an index file named:
+#
+#	$file.indx
+#
+sub form_indx($)
+{
+    # XXX - write this code
+    # XXX - should be able to deal with both .gz and plain files
+    # XXX - should assume that the indx file will have a .indx suffix on it
+}
+
+
 # archive - archive a file
 #
 # usage:
@@ -2065,7 +2084,7 @@ sub archive($$$$)
     # step 10 - if -i then process the index files for the file.tstamp-now 
     #
     if (defined $opt_i) {
-	# XXX - perform index processing on $i to form $i.indx
+	&form_indx($i);
     }
 
     # step 11 - If -1 was given, the gzip /a/path/OLD/file.tstamp-now
