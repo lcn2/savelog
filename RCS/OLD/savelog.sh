@@ -99,7 +99,6 @@
 # common locations
 #
 PATH="/usr/sbin:/usr/ucb:/usr/bsd:/sbin:/usr/bin:/bin:/usr/etc:/usr/freeware/bin:/usr/gnu/bin:/usr/local/bin"
-COMP_FLAG="--best --force"
 DOT_Z=".gz"
 ECHO="/usr/bin/echo"
 CHOWN="/usr/bin/chown"
@@ -127,12 +126,14 @@ elif [ -x /bin/gzip ]; then
 else
     GZIP_BINARY="/usr/gnu/bin/gzip"
 fi
+# NOTE: gzip uses $GZIP as the default set of args
+GZIP="--best --force"
 if [ -x /usr/bin/test ]; then
     TEST="/usr/bin/test"
 else
     TEST="/bin/test"
 fi
-export PATH COMP_FLAG DOT_Z ECHO CHOWN CHGRP CHMOD MV RM EXPR MKDIR
+export PATH GZIP DOT_Z ECHO CHOWN CHGRP CHMOD MV RM EXPR MKDIR
 export GETOPT GZIP_BINARY TEST
 
 # paranoid firewall
@@ -329,7 +330,8 @@ while [ $# -gt 0 ]; do
 	else
 	    newfile="$newname.1$DOT_Z"
 	    $RM -f "$newfile"
-	    $GZIP_BINARY $COMP_FLAG -c "$newname.0" > "$newfile"
+	    # NOTE: gzip uses $GZIP as the default set of args
+	    $GZIP_BINARY -c "$newname.0" > "$newfile"
 	    $RM -f "$newname.0"
 	fi
 	if [ ! -z "$user" ]; then
