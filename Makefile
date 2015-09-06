@@ -2,9 +2,9 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.11 $
-# @(#) $Id: Makefile,v 1.11 2004/02/14 03:55:59 chongo Exp chongo $
-# @(#) $Source: /usr/local/src/etc/savelog/RCS/Makefile,v $
+# @(#) $Revision: 1.12 $
+# @(#) $Id: Makefile,v 1.12 2007/05/19 09:50:49 chongo Exp root $
+# @(#) $Source: /usr/local/src/sbin/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
 #
@@ -33,7 +33,7 @@
 
 SHELL=/bin/sh
 
-DESTDIR=/usr/local/etc
+DESTDIR=/usr/local/sbin
 LIBDIR=/usr/local/lib
 DESTLIB=${LIBDIR}/savelog
 WWWDIR=/web/isthe/chroot/html/chongo/src/savelog
