@@ -1,0 +1,13 @@
+/etc/rc.d/init.d/postfix stop
+mv po po.init
+tar -zcf po.init.tgz po.init
+mv po.init po
+find po -type f -name '*.0' -print | xargs gzip --best
+find po -type f ! -name '*.gz' | xargs chmod 0666
+find /web/box/html/po -type f -name '*.gz' | ./rename
+/usr/local/etc/savelog -c 99 -i mail -m 0666 -M 0444 -1 -R /web/box/html/po
+find po -type f -name '*.gz' | xargs chmod 0444
+mv po po.postinit
+tar -zcf po.postinit.tgz po.postinit
+mv po.postinit po
+/etc/rc.d/init.d/postfix start

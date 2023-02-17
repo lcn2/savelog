@@ -2,8 +2,8 @@
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.12 $
-# @(#) $Id: Makefile,v 1.12 2007/05/19 09:50:49 chongo Exp root $
+# @(#) $Revision: 1.13 $
+# @(#) $Id: Makefile,v 1.13 2015/09/06 10:58:12 root Exp $
 # @(#) $Source: /usr/local/src/sbin/savelog/RCS/Makefile,v $
 #
 # Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
