@@ -1,12 +1,8 @@
-#!/bin/make
+#!/usr/bin/env make
 #
 # savelog - save/compress log files
 #
-# @(#) $Revision: 1.13 $
-# @(#) $Id: Makefile,v 1.13 2015/09/06 10:58:12 root Exp $
-# @(#) $Source: /usr/local/src/sbin/savelog/RCS/Makefile,v $
-#
-# Copyright (c) 2000 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2000,2023 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -31,13 +27,19 @@
 # Share and enjoy!
 
 
-SHELL=/bin/sh
+SHELL= bash
 
-DESTDIR=/usr/local/sbin
-LIBDIR=/usr/local/lib
-DESTLIB=${LIBDIR}/savelog
-WWWDIR=/web/isthe/chroot/html/chongo/src/savelog
+DESTDIR= /usr/local/sbin
+LIBDIR= /usr/local/lib
+DESTLIB= ${LIBDIR}/savelog
+WWWDIR= /web/isthe/chroot/html/chongo/src/savelog
 INSTALL= install
+RM= rm
+DATE= date
+MKDIR= mkdir
+CP= cp
+CHMOD= chmod
+TAR= tar
 
 INDX_PROG= mail
 
@@ -46,32 +48,32 @@ TARGETS= savelog ${INDX_PROG}
 all: ${TARGETS}
 
 savelog: savelog.pl
-	-rm -f $@
-	-rm -rf OLD date
-	date > date
-	mkdir OLD
+	${RM} -f $@
+	${RM} -rf OLD date
+	${DATE} > date
+	${MKDIR} -p OLD
 	./savelog.pl date
 	@if [ ! -f date -o -s date ]; then \
 	    echo "savelog did not seem to work, check it manually" 1>&2; \
 	    exit 1; \
 	fi
-	-rm -rf OLD date
-	cp -f savelog.pl $@
-	chmod +x $@
+	${RM} -rf OLD date
+	${CP} -f savelog.pl $@
+	${CHMOD} +x $@
 
 install: all
 	${INSTALL} -m 0755 savelog ${DESTDIR}
 	-@if [ ! -d "${LIBDIR}" ]; then \
-	    echo "mkdir -p ${LIBDIR}"; \
-	    mkdir -p ${LIBDIR}; \
-	    echo "chmod 0755 ${LIBDIR}"; \
-	    chmod 0755 ${LIBDIR}; \
+	    echo "${MKDIR} -p ${LIBDIR}"; \
+	    ${MKDIR} -p ${LIBDIR}; \
+	    echo "${CHMOD} 0755 ${LIBDIR}"; \
+	    ${CHMOD} 0755 ${LIBDIR}; \
 	fi
 	-@if [ ! -d "${DESTLIB}" ]; then \
-	    echo "mkdir -p ${DESTLIB}"; \
-	    mkdir -p ${DESTLIB}; \
-	    echo "chmod 0755 ${DESTLIB}"; \
-	    chmod 0755 ${DESTLIB}; \
+	    echo "${MKDIR} -p ${DESTLIB}"; \
+	    ${MKDIR} -p ${DESTLIB}; \
+	    echo "${CHMOD} 0755 ${DESTLIB}"; \
+	    ${CHMOD} 0755 ${DESTLIB}; \
 	fi
 	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
 	-@if [ -d "${WWWDIR}" ]; then \
@@ -88,15 +90,15 @@ install: all
 	     for i in ${INDX_PROG}; do \
 	         files="$$files savelog/$$i"; \
 	     done; \
-	     echo "tar -zcvf $$tgz $$files"; \
-	     tar -zcvf $$tgz $$files; \
-	     echo "chmod 0444 $$tgz"; \
-	     chmod 0444 $$tgz; \
+	     echo "${TAR} -zcvf $$tgz $$files"; \
+	     ${TAR} -zcvf $$tgz $$files; \
+	     echo "${CHMOD} 0444 $$tgz"; \
+	     ${CHMOD} 0444 $$tgz; \
 	    ); \
 	fi
 
 clean:
-	rm -rf date OLD
+	${RM} -rf date OLD
 
 clobber: clean
-	rm -f savelog
+	${RM} -f savelog
