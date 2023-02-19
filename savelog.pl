@@ -1,13 +1,8 @@
-#!/usr/bin/perl -w
-#!/usr/bin/perl -Tw
+#!/usr/bin/env perl
 #
 # savelog - save old log files and prep for web indexing
 #
-# @(#) $Revision: 3.7 $
-# @(#) $Id: savelog.pl,v 3.7 2007/05/19 09:50:49 chongo Exp $
-# @(#) $Source: /usr/local/src/sbin/savelog/RCS/savelog.pl,v $
-#
-# Copyright (c) 2000-2002 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2000-2002,2023 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,

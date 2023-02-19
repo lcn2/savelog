@@ -1,4 +1,4 @@
-#!/usr/bin/perl -wT
+#!/usr/bin/env perl
 #
 # mail - mail indexing routine for savelog
 #
