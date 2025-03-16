@@ -2,7 +2,7 @@
 #
 # savelog - save/compress log files
 #
-# Copyright (c) 2000,2023 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2000,2023,2025 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -22,83 +22,106 @@
 # OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
 #
-# chongo <was here> /\oo/\
+# chongo (Landon Curt Noll) /\oo/\
+#
+# http://www.isthe.com/chongo/index.html
+# https://github.com/lcn2
 #
 # Share and enjoy!
 
 
+#############
+# utilities #
+#############
+CHMOD= chmod
+CP= cp
+DATE= date
+ID= id
+INSTALL= install
+MKDIR= mkdir
+RM= rm
 SHELL= bash
+TAR= tar
+
+
+######################
+# target information #
+######################
+
+# V=@:  do not echo debug statements (quiet mode)
+# V=@   echo debug statements (debug / verbose mode)
+#
+V=@:
+#V=@
 
 DESTDIR= /usr/local/sbin
 LIBDIR= /usr/local/lib
 DESTLIB= ${LIBDIR}/savelog
-WWWDIR= /web/chongo/isthe.com/chongo/src/savelog
-INSTALL= install
-RM= rm
-DATE= date
-MKDIR= mkdir
-CP= cp
-CHMOD= chmod
-TAR= tar
 
 INDX_PROG= mail
 
 TARGETS= savelog ${INDX_PROG}
 
-all: ${TARGETS}
 
-savelog: savelog.pl
-	${RM} -f $@
-	${RM} -rf OLD date
-	${DATE} > date
-	${MKDIR} -p OLD
-	./savelog.pl date
-	@if [ ! -f date -o -s date ]; then \
+######################################
+# all - default rule - must be first #
+######################################
+
+all: ${TARGETS}
+	${V} echo DEBUG =-= $@ start =-=
+	${V} echo DEBUG =-= $@ end =-=
+
+
+#################################################
+# .PHONY list of rules that do not create files #
+#################################################
+
+.PHONY: all configure clean clobber install \
+	test
+
+
+#################
+# utility rules #
+#################
+
+test: all
+	${V} echo DEBUG =-= $@ start =-=
+	@echo "make $@: testing savelog"
+	@${RM} -rf OLD logfile
+	@${DATE} > logfile
+	@${MKDIR} -p OLD
+	@./savelog logfile
+	@if [ ! -f logfile -o -s logfile ]; then \
 	    echo "savelog did not seem to work, check it manually" 1>&2; \
 	    exit 1; \
 	fi
-	${RM} -rf OLD date
-	${CP} -f savelog.pl $@
-	${CHMOD} +x $@
+	@${RM} -rf OLD logfile
+	@echo "make $@: savelog passed"
+	${V} echo DEBUG =-= $@ end =-=
 
-install: all
-	${INSTALL} -m 0755 savelog ${DESTDIR}
-	-@if [ ! -d "${LIBDIR}" ]; then \
-	    echo "${MKDIR} -p ${LIBDIR}"; \
-	    ${MKDIR} -p ${LIBDIR}; \
-	    echo "${CHMOD} 0755 ${LIBDIR}"; \
-	    ${CHMOD} 0755 ${LIBDIR}; \
-	fi
-	-@if [ ! -d "${DESTLIB}" ]; then \
-	    echo "${MKDIR} -p ${DESTLIB}"; \
-	    ${MKDIR} -p ${DESTLIB}; \
-	    echo "${CHMOD} 0755 ${DESTLIB}"; \
-	    ${CHMOD} 0755 ${DESTLIB}; \
-	fi
-	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
-	-@if [ -d "${WWWDIR}" ]; then \
-	    echo "${INSTALL} -m 0444 savelog ${WWWDIR}"; \
-	    ${INSTALL} -m 0444 savelog ${WWWDIR}; \
-	    echo "${INSTALL} -m 0444 ${INDX_PROG} ${WWWDIR}"; \
-	    ${INSTALL} -m 0444 ${INDX_PROG} ${WWWDIR}; \
-	    echo "${INSTALL} -m 0444 Makefile ${WWWDIR}"; \
-	    ${INSTALL} -m 0444 Makefile ${WWWDIR}; \
-	    (echo "cd ${WWWDIR}/.."; \
-	     cd ${WWWDIR}/..; \
-	     tgz="savelog/savelog.tgz"; \
-	     files="savelog/savelog savelog/Makefile"; \
-	     for i in ${INDX_PROG}; do \
-	         files="$$files savelog/$$i"; \
-	     done; \
-	     echo "${TAR} -zcvf $$tgz $$files"; \
-	     ${TAR} -zcvf $$tgz $$files; \
-	     echo "${CHMOD} 0444 $$tgz"; \
-	     ${CHMOD} 0444 $$tgz; \
-	    ); \
-	fi
+
+###################################
+# standard Makefile utility rules #
+###################################
+
+configure:
+	${V} echo DEBUG =-= $@ start =-=
+	${V} echo DEBUG =-= $@ end =-=
 
 clean:
-	${RM} -rf date OLD
+	${V} echo DEBUG =-= $@ start =-=
+	${RM} -rf logfile OLD
+	${V} echo DEBUG =-= $@ end =-=
 
 clobber: clean
-	${RM} -f savelog
+	${V} echo DEBUG =-= $@ start =-=
+	${V} echo DEBUG =-= $@ end =-=
+
+install: all test
+	${V} echo DEBUG =-= $@ start =-=
+	@if [[ $$(${ID} -u) != 0 ]]; then echo "ERROR: must be root to make $@" 1>&2; exit 2; fi
+	${INSTALL} -m 0755 -d ${DESTDIR}
+	${INSTALL} -m 0755 savelog ${DESTDIR}
+	${INSTALL} -m 0755 -d ${LIBDIR}
+	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
+	${V} echo DEBUG =-= $@ end =-=

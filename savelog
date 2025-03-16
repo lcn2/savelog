@@ -2,7 +2,7 @@
 #
 # savelog - save old log files and prep for web indexing
 #
-# Copyright (c) 2000-2002,2023 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2000-2002,2023,2025 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -22,7 +22,10 @@
 # OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
 #
-# chongo <was here> /\oo/\
+# chongo (Landon Curt Noll) /\oo/\
+#
+# http://www.isthe.com/chongo/index.html
+# https://github.com/lcn2
 #
 # Share and enjoy!
 #
@@ -49,7 +52,7 @@
 #	-a OLD	   - OLD directory name (not a path) (def: OLD)
 #	-A archive - sub-directory under OLD to place files beyond cycle 1
 #
-# 	savelog [... same flags as above ...] -R dir ...
+#	savelog [... same flags as above ...] -R dir ...
 #
 #	-R	   - args are dirs under which most files are archived
 #
@@ -96,7 +99,7 @@
 # had the file opened for writing and later flushed its buffers into it.
 #
 #	[[ NOTE: The timestamps are determined by POSIX P1003.1 ``seconds
-#	   since the the Epoch'' which is effectively the number of 1 second
+#	   since the Epoch'' which is effectively the number of 1 second
 #	   intervals since 1970-01-01 00:00:00 UTC epoch not counting
 #	   leap seconds. ]]
 #
@@ -182,9 +185,9 @@
 # One can control the number of cycles that savelog will archive a file
 # via the '-c count' option.  By default savelog keeps 14 cycles.
 #
-# If '-c 1' is given, then only the plaintext cycle file is kept.
-# If '-c 2' is given, the plaintext file and 1 gziped file is kept.
-# If '-c 3' is given, the plaintext file and 2 gziped files are kept.
+# If '-c 1' is given, then only the plain text cycle file is kept.
+# If '-c 2' is given, the plain text file and 1 gziped file is kept.
+# If '-c 3' is given, the plain text file and 2 gziped files are kept.
 #
 # When savelog finds that too many cycles exist, it will removed those
 # with the oldest starting timestamps until the number of cycles is
@@ -229,7 +232,7 @@
 #	/b/history/directory/file.948209998-948296401.gz
 #
 # NOTE: The cycle 1 file will never be placed under OLD/archive.  Only
-#	files beyold cycle 1 will be placed under OLD/archive when
+#	files beyond cycle 1 will be placed under OLD/archive when
 #	-A archive is given.
 #
 ###
@@ -280,9 +283,9 @@
 #
 ###
 #
-# The following prechecks are performed at the start of savelog:
+# The following pre-checks are performed at the start of savelog:
 #
-#	-1) Precheck: 	:-)
+#	-1) Pre-check:	:-)
 #
 #	     * case no -a and no -A:
 #		+ If /a/path/OLD exists, it must be a writable directory
@@ -440,7 +443,7 @@ use strict;
 use bytes;
 use English;
 use vars qw($opt_m $opt_M $opt_o $opt_g $opt_c
-	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_L $opt_v
+	    $opt_h $opt_n $opt_1 $opt_z $opt_T $opt_L $opt_v $opt_V
 	    $opt_i $opt_I $opt_a $opt_A $opt_R);
 use Getopt::Std;
 $ENV{PATH} = "/sbin:/bin:/usr/sbin:/usr/bin";
@@ -457,6 +460,7 @@ use File::Find;
 
 # my vars
 #
+my $version = "1.0.0 2025-03-16";	# our version
 my $usage;		# usage message
 my $file_mode;		# set files to this mode
 my $archive_mode;	# set archived files to this mode
@@ -482,9 +486,9 @@ my @walk_files;		# list if files found by walk_dir()
 #
 $usage = "usage:\n" .
 	 "$0 [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]\n" .
-	 "\t[-h] [-n] [-1] [-z] [-T] [-L] [-v]\n" .
+	 "\t[-h] [-n] [-1] [-z] [-T] [-L] [-v] [-V]\n" .
 	 "\t[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...\n" .
-	 "\t\n" .
+	 "\n" .
 	 "\t-m mode\t chmod current files to mode (def: 0644)\n" .
 	 "\t-M mode\t chmod archived files to mode (def: 0444)\n" .
 	 "\t-o owner chown files to user (def: do not chown)\n" .
@@ -497,14 +501,17 @@ $usage = "usage:\n" .
 	 "\t-T\t do not create if missing\n" .
 	 "\t-L\t do not gziped any new files (def: gzip after 1st cycle)\n" .
 	 "\t-v\t\t verbose output\n" .
+	 "\t-V\t\t print version and exit\n" .
 	 "\t-i indx_type\t form index files of a given type (def: don't)\n" .
 	 "\t-I typedir\t type file prog dir (def: /usr/local/lib/savelog)\n" .
 	 "\t-a OLD\t\t OLD directory name (not a path) (def: OLD)\n" .
 	 "\t-A archive\t files beyond cycle 1 under OLD/archive (def: OLD)\n" .
-	 "\t\n" .
+	 "\n" .
 	 "$0 [... same flags as above ...] -R dir ...\n" .
-	 "\t\n" .
-	 "\t-R\t args are directories under which most files are archived\n";
+	 "\n" .
+	 "\t-R\t args are directories under which most files are archived\n" .
+	 "\n" .
+	 "$0 version: $version\n";
 
 # function prototypes
 #
@@ -597,9 +604,9 @@ sub err_msg($$@)
     #
     print STDERR "$0: ERROR($code): ";
     if (@args) {
-    	printf STDERR $fmt, @args;
+	printf STDERR $fmt, @args;
     } else {
-    	print STDERR $fmt;
+	print STDERR $fmt;
     }
     print STDERR "\n";
 
@@ -631,9 +638,9 @@ sub warn_msg($$@)
     #
     print STDERR "$0: Warn($code): ";
     if (@args) {
-    	printf STDERR $fmt, @args;
+	printf STDERR $fmt, @args;
     } else {
-    	print STDERR $fmt;
+	print STDERR $fmt;
     }
     print STDERR "\n";
 
@@ -665,14 +672,14 @@ sub walk_dir($)
     # taint pruning and untainting
     #
     if ($File::Find::name =~ m#^([\w./,][-\@\w./+:%,~]*)$#) {
-    	$File::Find::name = $1;
+	$File::Find::name = $1;
     } else {
 	# disable further tree walking on a tainted name
 	#
 	print "DEBUG: walk_dir: pruning tainted path: $File::Find::name\n"
-	 	if $verbose;
+		if $verbose;
 	$File::Find::prune = $true;
-    	return;
+	return;
     }
 
     # prune out dirs with the name CVS, RCS or SCCS
@@ -683,7 +690,7 @@ sub walk_dir($)
     #
     if (-d $name &&
         ($name eq "CVS" || $name eq "RCS" || $name eq "SCCS" ||
-    	 $name eq $oldname || $name =~ /^\../ ||
+	 $name eq $oldname || $name =~ /^\../ ||
 	 ! -r $name || ! -w $name || ! -x $name)) {
 
 	# disable further tree walking
@@ -720,7 +727,7 @@ sub walk_dir($)
 
     # ignore files ending in .gz, .indx or .new
     #		   starting with .
-    #	     	   that match m#\.\d{9,10}\-\d{9,10}$#
+    #		   that match m#\.\d{9,10}\-\d{9,10}$#
     #
     if ($name =~ /\.gz$|\.indx$|\.new$|^\.|\.\d{9,10}\-\d{9,10}$/) {
 	print "DEBUG: walk_dir: ignoring file: $File::Find::name\n"
@@ -819,9 +826,9 @@ sub parse()
 
     # parse args
     #
-    if (!getopts('m:M:o:g:c:hn1zTLvi:I:a:A:R') || !defined($ARGV[0])) {
-    	die $usage;
-	exit 1;
+    if (!getopts('m:M:o:g:c:hn1zTLvVi:I:a:A:R')) {
+	die $usage;
+	exit 2;
     }
 
     # process -h and exit
@@ -829,6 +836,20 @@ sub parse()
     if (defined $opt_h) {
 	print "$usage";
 	exit 0;
+    }
+
+    # process -V and exit
+    #
+    if (defined $opt_V) {
+	print "$version\n";
+	exit 0;
+    }
+
+    # catch the case of no args
+    #
+    if (!defined($ARGV[0])) {
+	die $usage;
+	exit 2;
     }
 
     # -v
@@ -851,7 +872,7 @@ sub parse()
     #
     $archive_mode = oct($opt_M) if defined $opt_M;
     if ($archive_mode != 0444) {
-    	$archdir_mode = 0700;
+	$archdir_mode = 0700;
 	if (($archive_mode & 0060) != 0) {
 	    $archdir_mode |= (($archive_mode & 0060) | 0010);
 	}
@@ -860,7 +881,7 @@ sub parse()
 	}
 	$archdir_mode |= 02000;
     } else {
-    	$archdir_mode = 02755;
+	$archdir_mode = 02755;
     }
     printf("DEBUG: archive mode: 0%04o\n", $archive_mode) if $verbose;
     printf("DEBUG: archive dir mode: 0%04o\n", $archdir_mode) if $verbose;
@@ -932,9 +953,9 @@ sub parse()
 	print "DEBUG: index prog dir: $indx_dir\n" if $verbose;
     }
     if (defined($indx_type)) {
-    	if (! -x "$indx_dir/$indx_type") {
+	if (! -x "$indx_dir/$indx_type") {
 	    err_msg(13,
-	    	"parse: index type prog: $indx_type not found in: $indx_dir");
+		"parse: index type prog: $indx_type not found in: $indx_dir");
 	}
 	$indx_prog = "$indx_dir/$indx_type";
 	print "DEBUG: indexing prog: $indx_prog\n" if $verbose;
@@ -989,7 +1010,7 @@ sub untaint($)
     my $file = $_[0];		# get arg
 
     if ($file =~ m#^([\w./,][-\@\w./+:%,~]*)$#) {
-    	$file = $1;
+	$file = $1;
     } else {
 	err_msg(16, "file has dangerous chars: $file");
     }
@@ -1080,7 +1101,7 @@ sub prep_file($)
     if ($mode != $archdir_mode) {
 	if (chmod($archdir_mode, "$dir/$oldname") == 1) {
 	    printf("DEBUG: chmoded %s from 0%04o to 0%04o\n",
-	    	   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
+		   "$dir/$oldname", $mode, $archdir_mode) if $verbose;
 	} else {
 	    warn_msg(24, "unable to chmod 0%04o OLD directory: %s",
 			 $archdir_mode, "$dir/$oldname");
@@ -1089,7 +1110,7 @@ sub prep_file($)
     }
     if (! -w "$dir/$oldname") {
 	warn_msg(25, "OLD directory: $dir/$oldname is not writable");
-    	return ($false, undef, undef);
+	return ($false, undef, undef);
     }
     #
     if ($gz_dir ne "$dir/$oldname") {
@@ -1584,7 +1605,7 @@ sub last_tstamp(@)
 	    $i =~ /\.\d{9,10}\-(\d{9,10})$/) {
 	    $tstamp1 = $1;
 	    if ((defined $last && $last < $tstamp1) || !defined $last) {
-	    	$last = $tstamp1;
+		$last = $tstamp1;
 	    }
 	}
     }
@@ -1872,13 +1893,13 @@ sub gzip_or_move($$$$)
 }
 
 
-# hard_link - ensure that a file is hardlinked to another
+# hard_link - ensure that a file is hard linked to another
 #
 # usage:
 #	hard_link($from, $to)
 #
-#	$from		hardlink this file
-#	$to		ensure that $to is a hardlink to $from
+#	$from		hard link this file
+#	$to		ensure that $to is a hard link to $from
 #
 # returns:
 #	0 ==> archive was unsuccessful
@@ -1901,7 +1922,7 @@ sub hard_link($$)
 	return $false;
     }
 
-    # If the $to file does exist, see if it is a hardlink to $from.
+    # If the $to file does exist, see if it is a hard link to $from.
     # We can ignore this if $from does not have enough links.
     #
     if ($f_links > 1 && -f $to) {
@@ -1909,23 +1930,23 @@ sub hard_link($$)
 	if (defined $t_dev && $f_dev == $t_dev &&
 	    defined $t_inum && $f_inum == $t_inum &&
 	    defined $t_links && $f_links == $t_links) {
-	    print "DEBUG: $from already hardlinked onto $to\n" if $verbose;
+	    print "DEBUG: $from already hard linked onto $to\n" if $verbose;
 	    return $true;
 	}
     }
 
-    # force $to to be a hardlink of $from
+    # force $to to be a hard link of $from
     #
     # untaint the name of $from and $to
     #
     $from = untaint($from);
     $to = untaint($to);
 
-    # hardlink $from onto $to
+    # hard link $from onto $to
     #
     rm($to, "removed prior to hard linking of $from") if -f $to;
     if (link($from, $to) <= 0) {
-	warn_msg(51, "failed to hardlink $from onto $to");
+	warn_msg(51, "failed to hard link $from onto $to");
 	return $false;
     }
     print "DEBUG: ln $from $to\n" if $verbose;
@@ -2049,7 +2070,7 @@ sub archive($$$)
 	    # gzip or move files in place
 	    #
 	    if (! defined $archive_name ||
-	    	$$plain[$i] =~ m#/$archive_name/[^/]+$#o) {
+		$$plain[$i] =~ m#/$archive_name/[^/]+$#o) {
 
 		# gzip the file in place
 		gzip_or_move($$plain[$i], $need_gzip, $true, $gz_dir);
@@ -2113,7 +2134,7 @@ sub archive($$$)
 	print "ln -f $file $old_file\n";
     } else {
 	if (! hard_link($file, "$old_file")) {
-	    warn_msg(56, "failed to hardlink $file onto %s", $old_file);
+	    warn_msg(56, "failed to hard link $file onto %s", $old_file);
 	    return $false;
 	}
     }
@@ -2156,14 +2177,14 @@ sub archive($$$)
 	    print "DEBUG: $indx_prog $old_file\n"
 		    if $verbose;
 	    if (system("$indx_prog", "$old_file",
-	    	       "$old_file.indx") != 0) {
+		       "$old_file.indx") != 0) {
 		warn_msg(58, "$indx_prog $old_file " .
 			     "$old_file.indx failed");
 	    }
 	    if (-f "$old_file.indx") {
 		if (chmod($archive_mode, "$old_file.indx") != 1) {
 		    warn_msg(59, "chmod 0%04o $old_file.indx failed",
-		    		  $archive_mode);
+				  $archive_mode);
 		}
 		printf("DEBUG: chmod 0%04o $old_file.indx\n",
 			$archive_mode) if $verbose;
