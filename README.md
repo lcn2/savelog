@@ -9,30 +9,31 @@ Save old log files, compress really old log files.
 ### To install:
 
 ```sh
+make test
 sudo make install
 ```
 
 ### To use, for example:
 
 ```sh
-savelog logfile
+/usr/local/sbin/savelog logfile
 ```
 
 ### Here is a demo:
 
 ```sh
 date > logfile
-savelog logfile
+/usr/local/sbin/savelog logfile
 
 ls -lRa logfile OLD
 
 date -u > logfile
-savelog logfile
+/usr/local/sbin/savelog logfile
 
 ls -lRa logfile OLD
 
 date > logfile
-savelog logfile
+/usr/local/sbin/savelog logfile
 
 ls -lRa logfile OLD
 ```
