@@ -446,3 +446,8 @@ The order of processing of /a/path/file is as follows:
          If -1 was not given, then we will ship this step.
 
          Assertion: The file /a/path/OLD/file.tstamp-now.gz exists and -1
+
+
+# Reporting Security Issues
+
+To report a security issue, please visit "[Reporting Security Issues](https://github.com/lcn2/savelog/security/policy)".
