@@ -122,7 +122,7 @@ install: all test
 	${V} echo DEBUG =-= $@ start =-=
 	@if [[ $$(${ID} -u) != 0 ]]; then echo "ERROR: must be root to make $@" 1>&2; exit 2; fi
 	${INSTALL} -m 0755 -d ${DESTDIR}
-	${INSTALL} -m 0755 savelog ${DESTDIR}
+	${INSTALL} -m 0555 savelog ${DESTDIR}
 	${INSTALL} -m 0755 -d ${LIBDIR}
-	${INSTALL} -m 0755 ${INDX_PROG} ${DESTLIB}
+	${INSTALL} -m 0555 ${INDX_PROG} ${DESTLIB}
 	${V} echo DEBUG =-= $@ end =-=
