@@ -55,8 +55,9 @@ TAR= tar
 V=@:
 #V=@
 
-DESTDIR= /usr/local/sbin
-LIBDIR= /usr/local/lib
+PREFIX= /usr/local
+DESTDIR= ${PREFIX}/bin
+LIBDIR= ${PREFIX}/lib
 DESTLIB= ${LIBDIR}/savelog
 
 INDX_PROG= mail
