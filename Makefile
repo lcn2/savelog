@@ -2,7 +2,7 @@
 #
 # savelog - save/compress log files
 #
-# Copyright (c) 2000,2023,2025 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 1997,1999-2000,2002-20045,2007,2015,2023,2025 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
