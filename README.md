@@ -42,9 +42,9 @@ ls -lRa logfile OLD
 ## Usage
 
 ```
-savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
-	[-h] [-n] [-1] [-z] [-T] [-L] [-v] [-V]
-	[-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...
+/usr/local/sbin/savelog [-m mode] [-M mode] [-o owner] [-g group] [-c cycle]
+                        [-h] [-n] [-1] [-z] [-T] [-L] [-v] [-V]
+                        [-i indx_type [-I typedir]] [-a OLD] [-A archive] file ...
 
 	-m mode	 chmod current files to mode (def: 0644)
 	-M mode	 chmod archived files to mode (def: 0444)
